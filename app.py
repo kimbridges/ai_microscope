@@ -48,11 +48,9 @@ def load_microscope_assets():
         leaf_img = np.array(Image.open(leaf_file))
         raw_mask = np.array(Image.open(mask_file))
         
-        # EXTRACT MICROGRAPH TARGET DIMENSIONS
         h, w, _ = leaf_img.shape
         
-        # ALIGNMENT ENGINE: Force the mask to stretch to match the exact matrix dimensions of the photo.
-        # We use INTER_NEAREST to keep cell interpretation borders perfectly sharp instead of blurry.
+        # NEAREST-NEIGHBOR INTERPOLATION: Preserve crisp discrete classification hex codes
         aligned_mask = cv2.resize(raw_mask, (w, h), interpolation=cv2.INTER_NEAREST)
         
         return leaf_img, aligned_mask, f"🎯 **System Live:** Spatial grids matched successfully at {w}x{h} pixels."
@@ -118,7 +116,7 @@ else:
     else:
         col_view, col_ctrl, col_pivot = st.columns([5.5, 3.5, 0.1])
 
-    # --- PASS 1: CONTROL DECK & DIAGNOSTIC SLIDERS (CENTER) ---
+    # --- PASS 1: CONTROL DECK (CENTER COLUMN) ---
     with col_ctrl:
         st.write("### 🎛️ Microscope Bench Controls")
         
@@ -139,18 +137,9 @@ else:
         st.session_state.y_stage = max(y_min, min(st.session_state.y_stage, y_max))
         st.session_state.x_stage = max(x_min, min(st.session_state.x_stage, x_max))
         
-        # --- DEBUG TOOLRAY ADDITION: OVERLAY ALPHA SLIDER ---
-        st.markdown("---")
-        st.write("🔬 **Debug & Alignment Assessment Toolkit**")
-        overlay_opacity = st.slider("Map Overlay Opacity (Alpha Blend)", min_value=0, max_value=100, value=35, step=5)
-        st.caption("💡 *Slide past 0% to bleed your color interpretation layout directly over the microscope window to verify matching coordinates.*")
-        st.markdown("---")
-
         # Overview Minimap Controller
         st.markdown("**🗺️ Specimen Overview Map (Click to re-center):**")
         map_canvas = leaf_img.copy()
-        
-        # Render boundary box on thumbnail map
         cv2.rectangle(map_canvas, (st.session_state.x_stage - half_crop, st.session_state.y_stage - half_crop), 
                       (st.session_state.x_stage + half_crop, st.session_state.y_stage + half_crop), (230, 40, 40), 6)
         cv2.circle(map_canvas, (st.session_state.x_stage, st.session_state.y_stage), 12, (230, 40, 40), -1)
@@ -169,31 +158,42 @@ else:
                 st.date_index = time.time()
                 st.rerun()
 
+        st.caption(f"📍 Target Anchor Coordinate: ({st.session_state.x_stage}, {st.session_state.y_stage})")
+
         if len(st.session_state.unlocked_tools) > 1:
             st.session_state.active_lens = st.radio("🛠️ Lens Filter Select:", options=st.session_state.unlocked_tools, horizontal=True)
             
         # SUBMIT RESPONSE INTERACTION
+        st.markdown("---")
         if st.button("🎯 Submit Center Crosshair Target", type="primary", use_container_width=True):
-            # Because arrays match size perfectly now, we extract from coordinates natively
             sampled_rgb = mask_img[st.session_state.y_stage, st.session_state.x_stage][:3]
             detected_layer = identify_tissue_by_color(sampled_rgb)
             
             if detected_layer == "spongy mesophyll":
                 st.session_state.target_found = True
-                st.success("🎉 **Correct Interpretation!** Target sits in the Spongy Mesophyll.")
+                st.success("🎉 **Correct Interpretation!** Your crosshair target is centered inside the loose Spongy Mesophyll tissue layer.")
             elif detected_layer == "cell wall boundary line":
-                st.warning("🧐 **Boundary Hit:** Target is touching a cell wall boundary line. Click slightly inside a cell chamber.")
+                st.warning("🧐 **Boundary Hit:** Your target crosshair is touching a dark cell wall line. Click slightly inside a cell interior chamber to submit.")
             elif detected_layer == "intercellular space / background":
-                st.info("💨 **Atmospheric Space Hit:** Targeting an empty intercellular air pocket.")
+                st.info("💨 **Atmospheric Space Hit:** You are targeting an empty intercellular air pocket. Use the overview map to acquire a distinct cell body.")
             else:
-                st.error(f"❌ **Tissue Misalignment:** Target is sitting inside the **{detected_layer.upper()}** layer instead.")
+                st.error(f"❌ **Tissue Misalignment:** Target is sitting inside the **{detected_layer.upper()}** layer instead. Click the low-power zone below the palisade columns.")
 
-        with st.expander("🔧 Telemetry Controls"):
-            if st.button("90-Sec Stall Signal", use_container_width=True):
+        # --- OPTIONAL EXPANDABLE CHASSIS FOR ADMIN/DIAGNOSTIC TOOLS ---
+        st.markdown("---")
+        with st.expander("🛠️ Developer / Alignment Debug Tools", expanded=False):
+            overlay_opacity = st.slider("Map Overlay Opacity (Alpha Blend)", min_value=0, max_value=100, value=0, step=5)
+            st.caption("💡 *Slide past 0% to bleed your color interpretation layout directly over the microscope window to verify matching coordinates.*")
+            
+            st.markdown("---")
+            st.write("*Simulate Student Telemetry Signals:*")
+            if st.button("Trigger 90-Sec Stall Warning", use_container_width=True):
                 st.session_state.stall_time = 95
-                if not st.session_state.target_found: st.session_state.pivot_triggered = True; st.rerun()
+                if not st.session_state.target_found: 
+                    st.session_state.pivot_triggered = True
+                    st.rerun()
 
-    # --- PASS 2: HIGH-POWER MICROSCOPE VIEWPORT WITH LIVE MATRIX BLENDING (LEFT) ---
+    # --- PASS 2: MICROSCOPE VIEWPORT WITH OPTIONAL OVERLAY BLENDING (LEFT) ---
     with col_view:
         st.write("### 🔬 Microscope Viewport")
         
@@ -203,33 +203,44 @@ else:
         cropped_img = leaf_img[y1:y2, x1:x2]
         cropped_mask = mask_img[y1:y2, x1:x2]
         
-        # Apply alternative filter matrix logic if active
         processed_img = apply_lens(cropped_img, st.session_state.active_lens).copy()
         
-        # DYNAMIC ALPHA BLENDER INTERACTION
+        # DYNAMIC ALPHA BLENDER (Only fires calculations if slider is actively opened and dialed up)
         if overlay_opacity > 0:
             alpha = (100 - overlay_opacity) / 100.0
             beta = overlay_opacity / 100.0
-            # Blend the visual channel snapshot with the aligned interpretation layer
             processed_img = cv2.addWeighted(processed_img, alpha, cropped_mask[:, :, :3], beta, 0)
         
-        # Draw central viewport overlay coordinate target marker
+        # Draw central viewport overlay crosshair
         vh, vw, _ = processed_img.shape
         cv2.drawMarker(processed_img, (int(vw / 2), int(vh / 2)), (240, 50, 50), markerType=cv2.MARKER_CROSS, markerSize=30, thickness=2)
         
         st.image(processed_img, use_container_width=True)
-        st.caption(f"🔬 Snapshot coordinates window spanning pixel range X:[{x1}:{x2}], Y:[{y1}:{y2}].")
+        st.caption("🔬 *Viewport Reticle Active: The red crosshair marks your absolute coordinate submission center point.*")
 
-    # --- PASS 3: THE SOCRATIC PIVOT ---
+    # --- PASS 3: THE SOCRATIC PIVOT (RIGHT) ---
     if st.session_state.pivot_triggered and not st.session_state.target_found:
         with col_pivot:
-            st.error("🤖 AI Co-Pilot Intervention")
-            choice = st.radio("Resolution path:", ["Select an option...", "Open Visual Diagnostic Palette", "Get Direct Structural Clue"])
+            st.error("🤖 AI Microscope Co-Pilot Intervening")
+            st.info(
+                "🗣️ **Audio Hint Broadcast:**\n\n"
+                "\"I might not have highlighted the structural map well enough for this slide. "
+                "We can pull up the gas exchange module here to see how these cells cooperate with air spaces, "
+                "or I can give you a direct visual clue. What is your preference?\""
+            )
+            
+            choice = st.radio("Choose resolution path:", ["Select an option...", "Open Visual Diagnostic Palette", "Get Direct Structural Clue"])
+            
             if choice == "Get Direct Structural Clue":
-                st.warning("💡 **Clue:** Target tissue consists of pale green, rounded, loosely packed cells underneath the vertical palisade columns.")
+                st.warning("💡 **Clue:** Look directly below the tightly packed, bright green vertical columns (Palisade Layer). The target tissue consists of pale green, rounded, loosely packed cells.")
+            
             elif choice == "Open Visual Diagnostic Palette":
                 st.success("🔓 Alternative Visual Toolkit Unlocked")
                 st.session_state.unlocked_tools = ["Standard View", "Wall Density Profile (High Contrast)", "Geometric Borders (Outline Map)"]
-                st.session_state.active_lens = st.selectbox("Select alternative filter:", options=st.session_state.unlocked_tools)
+                
+                st.session_state.active_lens = st.selectbox(
+                    "Select alternative lens filter profile:", options=st.session_state.unlocked_tools
+                )
+                
                 if st.button("Close Palette & Lock Tray", use_container_width=True):
                     st.session_state.pivot_triggered = False; st.rerun()
