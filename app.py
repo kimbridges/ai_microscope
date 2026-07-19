@@ -7,26 +7,62 @@ from PIL import Image
 import os
 from streamlit_image_coordinates import streamlit_image_coordinates
 
-# --- AUDIO FEEDBACK GENERATOR ---
-def trigger_spoken_feedback(audio_file_path="trivial_test.mp3"):
+import streamlit as st
+import base64
+import requests
+
+def trigger_dynamic_audio_feedback(text_script):
     """
-    Reads the local mp3 file and injects an invisible, auto-playing 
-    HTML5 audio element into the page.
+    Sends the generated AI text response to the ElevenLabs API,
+    synthesizes speech on the fly, and injects the raw binary bytes
+    into a hidden, auto-playing HTML5 audio element.
     """
+    # 1. Retrieve the secure API key from Streamlit's secrets vault
+    if "ELEVENLABS_API_KEY" not in st.secrets:
+        st.error("Missing ELEVENLABS_API_KEY in Streamlit Secrets.")
+        return
+        
+    api_key = st.secrets["ELEVENLABS_API_KEY"]
+    
+    # 2. Configure the ElevenLabs endpoint 
+    # Using 'Rachel' voice (21m00Tcm4TlvDq8ikWAM) as a clear default mentor voice
+    voice_id = "21m00Tcm4TlvDq8ikWAM"
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    
+    headers = {
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": api_key
+    }
+    
+    data = {
+        "text": text_script,
+        "model_id": "eleven_flash_v2_5", # Low-latency optimized flash model
+        "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75
+        }
+    }
+    
     try:
-        with open(audio_file_path, "rb") as f:
-            audio_bytes = f.read()
+        # 3. Fire the request to ElevenLabs
+        response = requests.post(url, json=data, headers=headers)
         
-        audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
-        
-        audio_html = f"""
-            <audio autoplay style="display:none;">
-                <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
-            </audio>
-        """
-        st.components.v1.html(audio_html, height=0, width=0)
-    except FileNotFoundError:
-        st.error(f"Could not find the audio file at: {audio_file_path}")
+        if response.status_code == 200:
+            # 4. Convert the raw mp3 binary stream straight into base64 bytes
+            audio_base64 = base64.b64encode(response.content).decode("utf-8")
+            
+            audio_html = f"""
+                <audio autoplay style="display:none;">
+                    <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+                </audio>
+            """
+            st.components.v1.html(audio_html, height=0, width=0)
+        else:
+            st.error(f"ElevenLabs API Error: {response.status_code} - {response.text}")
+            
+    except Exception as e:
+        st.error(f"Failed to connect to ElevenLabs TTS pipeline: {str(e)}")
 
 # --- 1. PAGE CONFIGURATION & INITIAL STATE ---
 st.set_page_config(layout="wide", page_title="AI Microscope Dashboard")
