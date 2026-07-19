@@ -1,4 +1,29 @@
 import streamlit as st
+import streamlit as st
+import base64
+
+def trigger_spoken_feedback(audio_file_path="trivial_test.mp3"):
+    """
+    Reads the local mp3 file and injects an invisible, auto-playing 
+    HTML5 audio element into the page.
+    """
+    try:
+        with open(audio_file_path, "rb") as f:
+            audio_bytes = f.read()
+        
+        # Convert the audio file to a base64 string
+        audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
+        
+        # Create an invisible HTML5 audio player set to autoplay
+        audio_html = f"""
+            <audio autoplay style="display:none;">
+                <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+            </audio>
+        """
+        # Render the invisible component in Streamlit
+        st.components.v1.html(audio_html, height=0, width=0)
+    except FileNotFoundError:
+        st.error(f"Could not find the audio file at: {audio_file_path}")
 import time
 import cv2
 import numpy as np
