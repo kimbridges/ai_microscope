@@ -102,22 +102,36 @@ else:
 with col_left:
     st.write("### Microscope Viewport")
     
-    # NEW MECHANISM: Replaces the slider with an authentic microscope objective nosepiece selectbox
     objective_lens = st.selectbox(
         "🔄 Rotate Microscope Objective Turret:",
         options=["4x (Scanning Objective)", "10x (Low Power Objective)", "40x (High Power Objective)"],
         index=1
     )
     
-    # Map the chosen objective lens directly to our viewport magnification scales
     zoom_map = {"4x (Scanning Objective)": 1.0, "10x (Low Power Objective)": 2.0, "40x (High Power Objective)": 4.5}
     zoom = zoom_map[objective_lens]
     crop_size = int(min(h, w) / zoom)
     
-    # Stage position adjusters
-    y_center = st.slider("Stage Vertical Position (Y-Axis)", min_value=int(crop_size/2), max_value=int(h - crop_size/2), value=int(h/2))
-    x_center = st.slider("Stage Horizontal Position (X-Axis)", min_value=int(crop_size/2), max_value=int(w - crop_size/2), value=int(w/2))
+    # --- SAFE STAGE BOUNDARY LOGIC ---
+    # Vertical Axis Calculation
+    y_min = int(crop_size / 2)
+    y_max = int(h - crop_size / 2)
+    if y_min >= y_max:
+        y_center = y_min  # Lock to midpoint because the whole height is visible
+        st.caption("↔️ *Vertical Stage: Centered (Full specimen height is within view)*")
+    else:
+        y_center = st.slider("Stage Vertical Position (Y-Axis)", min_value=y_min, max_value=y_max, value=int(h/2))
+        
+    # Horizontal Axis Calculation
+    x_min = int(crop_size / 2)
+    x_max = int(w - crop_size / 2)
+    if x_min >= x_max:
+        x_center = x_min  # Lock to midpoint
+        st.caption("↔️ *Horizontal Stage: Centered (Full specimen width is within view)*")
+    else:
+        x_center = st.slider("Stage Horizontal Position (X-Axis)", min_value=x_min, max_value=x_max, value=int(w/2))
     
+    # Execute safe viewport cropping
     y1, y2 = y_center - int(crop_size/2), y_center + int(crop_size/2)
     x1, x2 = x_center - int(crop_size/2), x_center + int(crop_size/2)
     cropped_img = raw_img[y1:y2, x1:x2]
@@ -125,8 +139,7 @@ with col_left:
     processed_img = apply_lens(cropped_img, st.session_state.active_lens)
     st.image(processed_img, use_container_width=True)
     
-    # Display an active magnification badge to provide continuous feedback
-    st.caption(f"**Current Status:** Viewing specimen through the {objective_lens}. Field of view cropped to {crop_size}x{crop_size} pixels.")
+    st.caption(f"**Current Status:** Viewing specimen through the {objective_lens}.")
     
     st.markdown("---")
     st.write("🔧 *Prototype Telemetry Controls*")
