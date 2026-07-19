@@ -5,12 +5,10 @@ import cv2
 import numpy as np
 from PIL import Image
 import os
+import requests
 from streamlit_image_coordinates import streamlit_image_coordinates
 
-import streamlit as st
-import base64
-import requests
-
+# --- DYNAMIC ELEVENLABS AUDIO FEEDBACK GENERATOR ---
 def trigger_dynamic_audio_feedback(text_script):
     """
     Sends the generated AI text response to the ElevenLabs API,
@@ -83,9 +81,9 @@ if "x_stage" not in st.session_state:
 if "y_stage" not in st.session_state:
     st.session_state.y_stage = -1
 
-# 🔄 TELEMETRY HISTORY TRACKING INITIALIZATION
+# 🔄 TELEMETRY HISTORY tracking
 if "telemetry_log" not in st.session_state:
-    st.session_state.telemetry_log = [] # Stores dicts: {'action': str, 'layer': str, 'timestamp': float}
+    st.session_state.telemetry_log = [] 
 if "last_action_time" not in st.session_state:
     st.session_state.last_action_time = time.time()
 
@@ -148,7 +146,7 @@ def identify_tissue_by_color(rgb_pixel):
 def apply_lens(img, lens_type):
     if lens_type == "Wall Density Profile (High Contrast)":
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTOP_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+        thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
         return cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)
     
     elif lens_type == "Geometric Borders (Outline Map)":
@@ -218,7 +216,7 @@ else:
                 st.session_state.x_stage = max(x_min, min(calculated_x, x_max))
                 st.session_state.y_stage = max(y_min, min(calculated_y, y_max))
                 
-                # 🔄 TELEMETRY LINK 1: Log Navigation Event
+                # Log Navigation Event
                 nav_rgb = mask_img[st.session_state.y_stage, st.session_state.x_stage][:3]
                 nav_layer = identify_tissue_by_color(nav_rgb)
                 st.session_state.telemetry_log.append({
@@ -228,7 +226,9 @@ else:
                 })
                 st.session_state.last_action_time = time.time()
                 
-                trigger_spoken_feedback("trivial_test.mp3")
+                # 🔊 ElevenLabs Test Voice Call 1
+                trigger_dynamic_audio_feedback("Moving the microscope stage.")
+                
                 st.date_index = time.time()
                 st.rerun()
 
@@ -240,18 +240,19 @@ else:
         # SUBMIT RESPONSE INTERACTION
         st.markdown("---")
         if st.button("🎯 Submit Center Crosshair Target", type="primary", use_container_width=True):
-            trigger_spoken_feedback("trivial_test.mp3")
-            
             sampled_rgb = mask_img[st.session_state.y_stage, st.session_state.x_stage][:3]
             detected_layer = identify_tissue_by_color(sampled_rgb)
             
-            # 🔄 TELEMETRY LINK 2: Log Submission Event
+            # Log Submission Event
             st.session_state.telemetry_log.append({
                 "action": "Submit Target",
                 "layer": detected_layer,
                 "timestamp": time.time()
             })
             st.session_state.last_action_time = time.time()
+            
+            # 🔊 ElevenLabs Test Voice Call 2 (Dynamic text payload)
+            trigger_dynamic_audio_feedback(f"Submitting target inside the {detected_layer}.")
             
             if detected_layer == "spongy mesophyll":
                 st.session_state.target_found = True
@@ -269,7 +270,7 @@ else:
             overlay_opacity = st.slider("Map Overlay Opacity (Alpha Blend)", min_value=0, max_value=100, value=0, step=5)
             st.caption("💡 *Slide past 0% to bleed your color interpretation layout directly over the microscope window to verify matching coordinates.*")
             
-            # 🔄 TELEMETRY DIAGNOSTIC DISPLAY
+            # Telemetry Display
             st.markdown("---")
             st.write("**Live Telemetry History (Last 4 Actions):**")
             if st.session_state.telemetry_log:
