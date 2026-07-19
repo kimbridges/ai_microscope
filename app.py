@@ -38,6 +38,10 @@ def load_micrograph():
         with urllib.request.urlopen(req) as response:
             img = Image.open(response)
         return np.array(img)
+
+raw_img = load_micrograph()
+h, w, _ = raw_img.shape
+
 # --- 3. DYNAMIC RENDERING LENSES (IMAGE PROCESSING) ---
 def apply_lens(img, lens_type):
     if lens_type == "Wall Density Profile (High Contrast)":
