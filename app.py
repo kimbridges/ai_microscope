@@ -18,19 +18,17 @@ if "active_lens" not in st.session_state:
 if "unlocked_tools" not in st.session_state:
     st.session_state.unlocked_tools = []
 
-# --- 2. BOTANICAL IMAGE ENGINE (LOCAL ARCHITECTURE ENGINE) ---
+# --- 2. BOTANICAL IMAGE ENGINE ---
 @st.cache_data
 def load_micrograph():
-    # Primary Choice: If you upload your own image to your repo, use it natively
     try:
         img = Image.open("leaf_section.jpg")
         return np.array(img)
     except FileNotFoundError:
-        # Secondary Choice: Generate a beautiful synthetic C3 leaf cross-section simulation
-        # This bypasses cloud firewall/IP blocking issues entirely and stays offline-safe
-        img = np.ones((800, 1200, 3), dtype=np.uint8) * 245  # Off-white canvas
+        # Generate our synthetic C3 leaf cross-section simulation
+        img = np.ones((800, 1200, 3), dtype=np.uint8) * 245
         
-        # Upper Epidermis (Clear boxy cells, pinkish safranin outlines)
+        # Upper Epidermis (boxy cells, safranin outlines)
         for x in range(0, 1200, 40):
             cv2.rectangle(img, (x, 40), (x+40, 100), (200, 130, 180), 2)
             
@@ -40,12 +38,11 @@ def load_micrograph():
                 cv2.rectangle(img, (x, y), (x+25, y+80), (140, 200, 140), -1)
                 cv2.rectangle(img, (x, y), (x+25, y+80), (60, 110, 60), 2)
                 
-        # Spongy Mesophyll (Loose, irregular parenchyma with air gaps)
+        # Spongy Mesophyll (Loose parenchyma with air gaps)
         np.random.seed(42)
         for _ in range(90):
             cx = np.random.randint(40, 1160)
             cy = np.random.randint(300, 660)
-            # Avoid overlapping the central vascular bundle zone
             if int((cx-600)**2 + (cy-460)**2)**0.5 < 170:
                 continue
             cv2.circle(img, (cx, cy), np.random.randint(22, 36), (140, 200, 140), -1)
@@ -53,16 +50,16 @@ def load_micrograph():
             
         # Vascular Bundle (Central Vein)
         cv2.circle(img, (600, 460), 160, (225, 220, 210), -1)
-        cv2.circle(img, (600, 460), 160, (120, 120, 120), 3)  # Bundle sheath
+        cv2.circle(img, (600, 460), 160, (120, 120, 120), 3)
         
-        # Xylem (Large, thick-walled cells on top side of bundle - Safranin red)
+        # Xylem (Safranin red thick-walled cells)
         for k in range(-2, 3):
             cv2.circle(img, (600 + k*40, 370), 24, (235, 120, 120), -1)
             cv2.circle(img, (600 + k*40, 370), 24, (180, 40, 40), 4)
             cv2.circle(img, (580 + k*35, 415), 18, (235, 120, 120), -1)
             cv2.circle(img, (580 + k*35, 415), 18, (180, 40, 40), 4)
             
-        # Phloem (Small, thin-walled cells on bottom side of bundle - Fast Green/blue)
+        # Phloem (Fast Green thin-walled cells)
         for px in range(500, 710, 16):
             for py in range(460, 580, 16):
                 if int((px-600)**2 + (py-460)**2)**0.5 < 140:
@@ -78,7 +75,7 @@ def load_micrograph():
 raw_img = load_micrograph()
 h, w, _ = raw_img.shape
 
-# --- 3. DYNAMIC RENDERING LENSES (IMAGE PROCESSING) ---
+# --- 3. DYNAMIC RENDERING LENSES ---
 def apply_lens(img, lens_type):
     if lens_type == "Wall Density Profile (High Contrast)":
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
@@ -105,11 +102,21 @@ else:
 with col_left:
     st.write("### Microscope Viewport")
     
-    zoom = st.slider("Microscope Magnification Stage", min_value=1, max_value=4, value=2)
+    # NEW MECHANISM: Replaces the slider with an authentic microscope objective nosepiece selectbox
+    objective_lens = st.selectbox(
+        "🔄 Rotate Microscope Objective Turret:",
+        options=["4x (Scanning Objective)", "10x (Low Power Objective)", "40x (High Power Objective)"],
+        index=1
+    )
+    
+    # Map the chosen objective lens directly to our viewport magnification scales
+    zoom_map = {"4x (Scanning Objective)": 1.0, "10x (Low Power Objective)": 2.0, "40x (High Power Objective)": 4.5}
+    zoom = zoom_map[objective_lens]
     crop_size = int(min(h, w) / zoom)
     
-    y_center = st.slider("Stage Vertical Adjust (Y-Axis)", min_value=int(crop_size/2), max_value=int(h - crop_size/2), value=int(h/2))
-    x_center = st.slider("Stage Horizontal Adjust (X-Axis)", min_value=int(crop_size/2), max_value=int(w - crop_size/2), value=int(w/2))
+    # Stage position adjusters
+    y_center = st.slider("Stage Vertical Position (Y-Axis)", min_value=int(crop_size/2), max_value=int(h - crop_size/2), value=int(h/2))
+    x_center = st.slider("Stage Horizontal Position (X-Axis)", min_value=int(crop_size/2), max_value=int(w - crop_size/2), value=int(w/2))
     
     y1, y2 = y_center - int(crop_size/2), y_center + int(crop_size/2)
     x1, x2 = x_center - int(crop_size/2), x_center + int(crop_size/2)
@@ -117,6 +124,9 @@ with col_left:
     
     processed_img = apply_lens(cropped_img, st.session_state.active_lens)
     st.image(processed_img, use_container_width=True)
+    
+    # Display an active magnification badge to provide continuous feedback
+    st.caption(f"**Current Status:** Viewing specimen through the {objective_lens}. Field of view cropped to {crop_size}x{crop_size} pixels.")
     
     st.markdown("---")
     st.write("🔧 *Prototype Telemetry Controls*")
@@ -133,7 +143,6 @@ with col_left:
                 st.session_state.pivot_triggered = True
                 st.rerun()
     with c3:
-        # Check if the viewport center coordinates hit the spongy mesophyll layer
         if (h * 0.40) <= y_center <= (h * 0.75):
             if st.button("🎯 Submit Current Viewport Coordinates", type="primary"):
                 st.session_state.target_found = True
@@ -142,7 +151,7 @@ with col_left:
             if st.button("🎯 Submit Current Viewport Coordinates", type="secondary"):
                 st.error("Target not found at these coordinates. Review cell shapes and positions.")
 
-# --- 5. THE SOCRATIC PIVOT (THE RIGHT HALF OF THE SPLIT SCREEN) ---
+# --- 5. THE SOCRATIC PIVOT ---
 if st.session_state.pivot_triggered and not st.session_state.target_found:
     with col_right:
         st.error("🤖 AI Microscope Co-Pilot Intervening")
@@ -172,7 +181,7 @@ if st.session_state.pivot_triggered and not st.session_state.target_found:
                 st.session_state.pivot_triggered = False
                 st.rerun()
 
-# --- 6. PERMANENT SYSTEM ACCESSORIES (THE SOFT TOOL TRAY) ---
+# --- 6. PERMANENT SYSTEM ACCESSORIES ---
 if len(st.session_state.unlocked_tools) > 0 and not st.session_state.pivot_triggered:
     st.sidebar.markdown("### 🛠️ Unlocked Accessory Tray")
     st.sidebar.write("Alternative visual tools permanently available for use:")
