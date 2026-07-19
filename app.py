@@ -17,16 +17,13 @@ def trigger_spoken_feedback(audio_file_path="trivial_test.mp3"):
         with open(audio_file_path, "rb") as f:
             audio_bytes = f.read()
         
-        # Convert the audio file to a base64 string
         audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
         
-        # Create an invisible HTML5 audio player set to autoplay
         audio_html = f"""
             <audio autoplay style="display:none;">
                 <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
             </audio>
         """
-        # Render the invisible component in Streamlit
         st.components.v1.html(audio_html, height=0, width=0)
     except FileNotFoundError:
         st.error(f"Could not find the audio file at: {audio_file_path}")
@@ -49,6 +46,12 @@ if "x_stage" not in st.session_state:
     st.session_state.x_stage = -1
 if "y_stage" not in st.session_state:
     st.session_state.y_stage = -1
+
+# 🔄 TELEMETRY HISTORY TRACKING INITIALIZATION
+if "telemetry_log" not in st.session_state:
+    st.session_state.telemetry_log = [] # Stores dicts: {'action': str, 'layer': str, 'timestamp': float}
+if "last_action_time" not in st.session_state:
+    st.session_state.last_action_time = time.time()
 
 # --- 2. THE DUAL-IMAGE BOTANICAL ENGINE ---
 def load_microscope_assets():
@@ -74,8 +77,6 @@ def load_microscope_assets():
         raw_mask = np.array(Image.open(mask_file))
         
         h, w, _ = leaf_img.shape
-        
-        # NEAREST-NEIGHBOR INTERPOLATION: Preserve crisp discrete classification hex codes
         aligned_mask = cv2.resize(raw_mask, (w, h), interpolation=cv2.INTER_NEAREST)
         
         return leaf_img, aligned_mask, f"🎯 **System Live:** Spatial grids matched successfully at {w}x{h} pixels."
@@ -111,7 +112,7 @@ def identify_tissue_by_color(rgb_pixel):
 def apply_lens(img, lens_type):
     if lens_type == "Wall Density Profile (High Contrast)":
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+        thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTOP_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
         return cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)
     
     elif lens_type == "Geometric Borders (Outline Map)":
@@ -181,9 +182,17 @@ else:
                 st.session_state.x_stage = max(x_min, min(calculated_x, x_max))
                 st.session_state.y_stage = max(y_min, min(calculated_y, y_max))
                 
-                # ⚡ TELEMETRY LINK 1: Trigger audio feedback on map navigation click
-                trigger_spoken_feedback("trivial_test.mp3")
+                # 🔄 TELEMETRY LINK 1: Log Navigation Event
+                nav_rgb = mask_img[st.session_state.y_stage, st.session_state.x_stage][:3]
+                nav_layer = identify_tissue_by_color(nav_rgb)
+                st.session_state.telemetry_log.append({
+                    "action": "Navigate Map",
+                    "layer": nav_layer,
+                    "timestamp": time.time()
+                })
+                st.session_state.last_action_time = time.time()
                 
+                trigger_spoken_feedback("trivial_test.mp3")
                 st.date_index = time.time()
                 st.rerun()
 
@@ -195,11 +204,18 @@ else:
         # SUBMIT RESPONSE INTERACTION
         st.markdown("---")
         if st.button("🎯 Submit Center Crosshair Target", type="primary", use_container_width=True):
-            # ⚡ TELEMETRY LINK 2: Trigger audio feedback on evaluation click
             trigger_spoken_feedback("trivial_test.mp3")
             
             sampled_rgb = mask_img[st.session_state.y_stage, st.session_state.x_stage][:3]
             detected_layer = identify_tissue_by_color(sampled_rgb)
+            
+            # 🔄 TELEMETRY LINK 2: Log Submission Event
+            st.session_state.telemetry_log.append({
+                "action": "Submit Target",
+                "layer": detected_layer,
+                "timestamp": time.time()
+            })
+            st.session_state.last_action_time = time.time()
             
             if detected_layer == "spongy mesophyll":
                 st.session_state.target_found = True
@@ -216,6 +232,15 @@ else:
         with st.expander("🛠️ Developer / Alignment Debug Tools", expanded=False):
             overlay_opacity = st.slider("Map Overlay Opacity (Alpha Blend)", min_value=0, max_value=100, value=0, step=5)
             st.caption("💡 *Slide past 0% to bleed your color interpretation layout directly over the microscope window to verify matching coordinates.*")
+            
+            # 🔄 TELEMETRY DIAGNOSTIC DISPLAY
+            st.markdown("---")
+            st.write("**Live Telemetry History (Last 4 Actions):**")
+            if st.session_state.telemetry_log:
+                for entry in st.session_state.telemetry_log[-4:]:
+                    st.text(f"⏱️ {time.strftime('%H:%M:%S', time.localtime(entry['timestamp']))} | {entry['action']} -> {entry['layer']}")
+            else:
+                st.text("No history recorded yet. Click the map to populate.")
             
             st.markdown("---")
             st.write("*Simulate Student Telemetry Signals:*")
@@ -234,16 +259,13 @@ else:
         
         cropped_img = leaf_img[y1:y2, x1:x2]
         cropped_mask = mask_img[y1:y2, x1:x2]
-        
         processed_img = apply_lens(cropped_img, st.session_state.active_lens).copy()
         
-        # DYNAMIC ALPHA BLENDER (Only fires calculations if slider is actively opened and dialed up)
         if overlay_opacity > 0:
             alpha = (100 - overlay_opacity) / 100.0
             beta = overlay_opacity / 100.0
             processed_img = cv2.addWeighted(processed_img, alpha, cropped_mask[:, :, :3], beta, 0)
         
-        # Draw central viewport overlay crosshair
         vh, vw, _ = processed_img.shape
         cv2.drawMarker(processed_img, (int(vw / 2), int(vh / 2)), (240, 50, 50), markerType=cv2.MARKER_CROSS, markerSize=30, thickness=2)
         
@@ -269,10 +291,7 @@ else:
             elif choice == "Open Visual Diagnostic Palette":
                 st.success("🔓 Alternative Visual Toolkit Unlocked")
                 st.session_state.unlocked_tools = ["Standard View", "Wall Density Profile (High Contrast)", "Geometric Borders (Outline Map)"]
-                
-                st.session_state.active_lens = st.selectbox(
-                    "Select alternative lens filter profile:", options=st.session_state.unlocked_tools
-                )
+                st.session_state.active_lens = st.selectbox("Select alternative lens filter profile:", options=st.session_state.unlocked_tools)
                 
                 if st.button("Close Palette & Lock Tray", use_container_width=True):
                     st.session_state.pivot_triggered = False; st.rerun()
