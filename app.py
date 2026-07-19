@@ -3,7 +3,6 @@ import time
 import cv2
 import numpy as np
 from PIL import Image
-import urllib.request
 
 # --- 1. PAGE CONFIGURATION & INITIAL STATE ---
 st.set_page_config(layout="wide", page_title="AI Microscope Prototype")
@@ -19,7 +18,7 @@ if "active_lens" not in st.session_state:
 if "unlocked_tools" not in st.session_state:
     st.session_state.unlocked_tools = []
 
-# --- 2. LOAD BOTANICAL MICROGRAPH DATA ---
+# --- 2. BOTANICAL IMAGE ENGINE (LOCAL ARCHITECTURE ENGINE) ---
 @st.cache_data
 def load_micrograph():
     # Primary Choice: If you upload your own image to your repo, use it natively
@@ -27,17 +26,54 @@ def load_micrograph():
         img = Image.open("leaf_section.jpg")
         return np.array(img)
     except FileNotFoundError:
-        # Secondary Choice: Fallback to the web image if no local file exists
-        url = "https://upload.wikimedia.org/wikipedia/commons/e/e0/Leaf_anatomy_with_labels_small.jpg"
+        # Secondary Choice: Generate a beautiful synthetic C3 leaf cross-section simulation
+        # This bypasses cloud firewall/IP blocking issues entirely and stays offline-safe
+        img = np.ones((800, 1200, 3), dtype=np.uint8) * 245  # Off-white canvas
         
-        # We explicitly add a User-Agent header to bypass automated scraping blocks
-        req = urllib.request.Request(
-            url, 
-            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AI-Microscope-Bot/1.0'}
-        )
-        with urllib.request.urlopen(req) as response:
-            img = Image.open(response)
-        return np.array(img)
+        # Upper Epidermis (Clear boxy cells, pinkish safranin outlines)
+        for x in range(0, 1200, 40):
+            cv2.rectangle(img, (x, 40), (x+40, 100), (200, 130, 180), 2)
+            
+        # Palisade Mesophyll (Columnar green cells)
+        for x in range(10, 1200, 30):
+            for y in [110, 200]:
+                cv2.rectangle(img, (x, y), (x+25, y+80), (140, 200, 140), -1)
+                cv2.rectangle(img, (x, y), (x+25, y+80), (60, 110, 60), 2)
+                
+        # Spongy Mesophyll (Loose, irregular parenchyma with air gaps)
+        np.random.seed(42)
+        for _ in range(90):
+            cx = np.random.randint(40, 1160)
+            cy = np.random.randint(300, 660)
+            # Avoid overlapping the central vascular bundle zone
+            if int((cx-600)**2 + (cy-460)**2)**0.5 < 170:
+                continue
+            cv2.circle(img, (cx, cy), np.random.randint(22, 36), (140, 200, 140), -1)
+            cv2.circle(img, (cx, cy), np.random.randint(22, 36), (60, 110, 60), 2)
+            
+        # Vascular Bundle (Central Vein)
+        cv2.circle(img, (600, 460), 160, (225, 220, 210), -1)
+        cv2.circle(img, (600, 460), 160, (120, 120, 120), 3)  # Bundle sheath
+        
+        # Xylem (Large, thick-walled cells on top side of bundle - Safranin red)
+        for k in range(-2, 3):
+            cv2.circle(img, (600 + k*40, 370), 24, (235, 120, 120), -1)
+            cv2.circle(img, (600 + k*40, 370), 24, (180, 40, 40), 4)
+            cv2.circle(img, (580 + k*35, 415), 18, (235, 120, 120), -1)
+            cv2.circle(img, (580 + k*35, 415), 18, (180, 40, 40), 4)
+            
+        # Phloem (Small, thin-walled cells on bottom side of bundle - Fast Green/blue)
+        for px in range(500, 710, 16):
+            for py in range(460, 580, 16):
+                if int((px-600)**2 + (py-460)**2)**0.5 < 140:
+                    cv2.circle(img, (px, py), 7, (160, 220, 190), -1)
+                    cv2.circle(img, (px, py), 7, (90, 150, 120), 1)
+                    
+        # Lower Epidermis
+        for x in range(0, 1200, 40):
+            cv2.rectangle(img, (x, 700), (x+40, 760), (200, 130, 180), 2)
+            
+        return img
 
 raw_img = load_micrograph()
 h, w, _ = raw_img.shape
@@ -46,14 +82,12 @@ h, w, _ = raw_img.shape
 def apply_lens(img, lens_type):
     if lens_type == "Wall Density Profile (High Contrast)":
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        # Emphasize thick xylem / epidermal structures via adaptive thresholding
         thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
         return cv2.cvtColor(thresh, cv2.COLOR_GRAY2RGB)
     
     elif lens_type == "Geometric Borders (Outline Map)":
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        edges = cv2.Canny(gray, 50, 150)
-        # Inverse edges to look like a black-and-ink drawing line map
+        edges = cv2.Canny(gray, 30, 100)
         inverted = cv2.bitwise_not(edges)
         return cv2.cvtColor(inverted, cv2.COLOR_GRAY2RGB)
     
@@ -63,7 +97,6 @@ def apply_lens(img, lens_type):
 st.title("🔬 AI Microscope Learning Environment")
 st.subheader("Objective: Locate the Spongy Mesophyll (Parenchyma)")
 
-# Setup split-screen dynamically based on system state
 if st.session_state.pivot_triggered:
     col_left, col_right = st.columns([3, 2])
 else:
@@ -72,11 +105,9 @@ else:
 with col_left:
     st.write("### Microscope Viewport")
     
-    # Simulate a viewport cropping mechanism (simulating panning/zooming)
     zoom = st.slider("Microscope Magnification Stage", min_value=1, max_value=4, value=2)
     crop_size = int(min(h, w) / zoom)
     
-    # For prototype testing, user simulates scanning by picking a region
     y_center = st.slider("Stage Vertical Adjust (Y-Axis)", min_value=int(crop_size/2), max_value=int(h - crop_size/2), value=int(h/2))
     x_center = st.slider("Stage Horizontal Adjust (X-Axis)", min_value=int(crop_size/2), max_value=int(w - crop_size/2), value=int(w/2))
     
@@ -84,13 +115,11 @@ with col_left:
     x1, x2 = x_center - int(crop_size/2), x_center + int(crop_size/2)
     cropped_img = raw_img[y1:y2, x1:x2]
     
-    # Apply selected visual adjustment filters from the student toolkit
     processed_img = apply_lens(cropped_img, st.session_state.active_lens)
     st.image(processed_img, use_container_width=True)
     
-    # --- SIMULATED TELEMETRY CONTROLS (BENEATH THE HOOD SENSORS) ---
     st.markdown("---")
-    st.write("🔧 *Prototype Telemetry Controls (To test system behavior without waiting 90 seconds)*")
+    st.write("🔧 *Prototype Telemetry Controls*")
     
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -104,9 +133,8 @@ with col_left:
                 st.session_state.pivot_triggered = True
                 st.rerun()
     with c3:
-        # Spongy mesophyll is historically located in the middle-to-lower ground tissue
-        # We simulate finding it if they position the Y-Axis into the lower-middle half
-        if (h * 0.45) <= y_center <= (h * 0.80):
+        # Check if the viewport center coordinates hit the spongy mesophyll layer
+        if (h * 0.40) <= y_center <= (h * 0.75):
             if st.button("🎯 Submit Current Viewport Coordinates", type="primary"):
                 st.session_state.target_found = True
                 st.success("Correct! You've located the loose, irregular cells of the Spongy Mesophyll.")
@@ -118,8 +146,6 @@ with col_left:
 if st.session_state.pivot_triggered and not st.session_state.target_found:
     with col_right:
         st.error("🤖 AI Microscope Co-Pilot Intervening")
-        
-        # Uncluttered Audio/Visual Metaphor: The system takes responsibility for the gap
         st.info(
             "🗣️ **Audio Script Broadcast:**\n\n"
             "\"I might not have highlighted the structural map well enough for this slide. "
@@ -134,11 +160,9 @@ if st.session_state.pivot_triggered and not st.session_state.target_found:
         
         elif choice == "Open the Visual Diagnostic Palette":
             st.success("🔓 Alternative Visual Toolkit Unlocked")
-            # Update permanent session assets
             if "Wall Density Profile (High Contrast)" not in st.session_state.unlocked_tools:
                 st.session_state.unlocked_tools = ["Standard View", "Wall Density Profile (High Contrast)", "Geometric Borders (Outline Map)"]
             
-            # Allow the student to select their diagnostic lens manually
             st.session_state.active_lens = st.selectbox(
                 "Select a lens filter to apply back to your primary viewport:", 
                 options=st.session_state.unlocked_tools
