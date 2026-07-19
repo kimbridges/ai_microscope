@@ -1,7 +1,13 @@
 import streamlit as st
-import streamlit as st
 import base64
+import time
+import cv2
+import numpy as np
+from PIL import Image
+import os
+from streamlit_image_coordinates import streamlit_image_coordinates
 
+# --- AUDIO FEEDBACK GENERATOR ---
 def trigger_spoken_feedback(audio_file_path="trivial_test.mp3"):
     """
     Reads the local mp3 file and injects an invisible, auto-playing 
@@ -24,12 +30,6 @@ def trigger_spoken_feedback(audio_file_path="trivial_test.mp3"):
         st.components.v1.html(audio_html, height=0, width=0)
     except FileNotFoundError:
         st.error(f"Could not find the audio file at: {audio_file_path}")
-import time
-import cv2
-import numpy as np
-from PIL import Image
-import os
-from streamlit_image_coordinates import streamlit_image_coordinates
 
 # --- 1. PAGE CONFIGURATION & INITIAL STATE ---
 st.set_page_config(layout="wide", page_title="AI Microscope Dashboard")
@@ -180,6 +180,10 @@ else:
             if calculated_x != st.session_state.x_stage or calculated_y != st.session_state.y_stage:
                 st.session_state.x_stage = max(x_min, min(calculated_x, x_max))
                 st.session_state.y_stage = max(y_min, min(calculated_y, y_max))
+                
+                # ⚡ TELEMETRY LINK 1: Trigger audio feedback on map navigation click
+                trigger_spoken_feedback("trivial_test.mp3")
+                
                 st.date_index = time.time()
                 st.rerun()
 
@@ -191,6 +195,9 @@ else:
         # SUBMIT RESPONSE INTERACTION
         st.markdown("---")
         if st.button("🎯 Submit Center Crosshair Target", type="primary", use_container_width=True):
+            # ⚡ TELEMETRY LINK 2: Trigger audio feedback on evaluation click
+            trigger_spoken_feedback("trivial_test.mp3")
+            
             sampled_rgb = mask_img[st.session_state.y_stage, st.session_state.x_stage][:3]
             detected_layer = identify_tissue_by_color(sampled_rgb)
             
