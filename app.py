@@ -17,59 +17,67 @@ if "pivot_triggered" not in st.session_state:
 if "active_lens" not in st.session_state:
     st.session_state.active_lens = "Standard View"
 if "unlocked_tools" not in st.session_state:
-    st.session_state.unlocked_tools = ["Standard View"]  # Initialize with standard view active
+    st.session_state.unlocked_tools = ["Standard View"]
 
-# --- 2. BOTANICAL IMAGE ENGINE ---
-def load_micrograph():
+# --- 2. THE DUAL-IMAGE BOTANICAL ENGINE ---
+def load_microscope_assets():
     repo_files = os.listdir(".")
-    target_file = None
+    
+    # Locate Visual Micrograph Asset
+    leaf_file = None
     for f in ["leaf_section.jpg", "leaf_section.jpeg", "leaf_section.JPG", "leaf_section.PNG"]:
         if f in repo_files:
-            target_file = f
+            leaf_file = f
             break
             
-    if target_file:
-        try:
-            img = Image.open(target_file)
-            return np.array(img), f"🎯 Successfully loaded real asset from repository: `{target_file}`"
-        except Exception as e:
-            return None, f"❌ Found `{target_file}` but failed to parse it: {str(e)}"
-    
-    # Fallback to synthetic image if no file matches
-    img = np.ones((800, 1200, 3), dtype=np.uint8) * 245
-    for x in range(0, 1200, 40):
-        cv2.rectangle(img, (x, 40), (x+40, 100), (200, 130, 180), 2)
-    for x in range(10, 1200, 30):
-        for y in [110, 200]:
-            cv2.rectangle(img, (x, y), (x+25, y+80), (140, 200, 140), -1)
-            cv2.rectangle(img, (x, y), (x+25, y+80), (60, 110, 60), 2)
-    np.random.seed(42)
-    for _ in range(90):
-        cx = np.random.randint(40, 1160)
-        cy = np.random.randint(300, 660)
-        if int((cx-600)**2 + (cy-460)**2)**0.5 < 170:
-            continue
-        cv2.circle(img, (cx, cy), np.random.randint(22, 36), (140, 200, 140), -1)
-        cv2.circle(img, (cx, cy), np.random.randint(22, 36), (60, 110, 60), 2)
-    cv2.circle(img, (600, 460), 160, (225, 220, 210), -1)
-    cv2.circle(img, (600, 460), 160, (120, 120, 120), 3)
-    for k in range(-2, 3):
-        cv2.circle(img, (600 + k*40, 370), 24, (235, 120, 120), -1)
-        cv2.circle(img, (600 + k*40, 370), 24, (180, 40, 40), 4)
-    for px in range(500, 710, 16):
-        for py in range(460, 580, 16):
-            if int((px-600)**2 + (py-460)**2)**0.5 < 140:
-                cv2.circle(img, (px, py), 7, (160, 220, 190), -1)
-                cv2.circle(img, (px, py), 7, (90, 150, 120), 1)
-    for x in range(0, 1200, 40):
-        cv2.rectangle(img, (x, 700), (x+40, 760), (200, 130, 180), 2)
-        
-    return img, "⚠️ No local file found matching naming conventions. Rendering synthetic fallback."
+    # Locate Interpretive Segmentation Mask Asset
+    mask_file = None
+    for f in ["color_layer.png", "color_layer.PNG", "color_layer.jpg", "color_layer.jpeg"]:
+        if f in repo_files:
+            mask_file = f
+            break
 
-raw_img, debug_msg = load_micrograph()
-h, w, _ = raw_img.shape
+    # Guard Rail: If assets missing, provide explicit instructions
+    if not leaf_file or not mask_file:
+        missing = []
+        if not leaf_file: missing.append("`leaf_section.jpg`")
+        if not mask_file: missing.append("`color_layer.png`")
+        return None, None, f"⚠️ Missing required assets in repository root: {', '.join(missing)}. Please verify file names match exactly."
 
-# --- 3. DYNAMIC RENDERING LENSES ---
+    try:
+        leaf_img = np.array(Image.open(leaf_file))
+        mask_img = np.array(Image.open(mask_file))
+        return leaf_img, mask_img, f"🎯 **System Live:** Successfully paired visual micrograph `{leaf_file}` with interpretive segmentation map `{mask_file}`."
+    except Exception as e:
+        return None, None, f"❌ Error initializing image buffers: {str(e)}"
+
+leaf_img, mask_img, status_msg = load_microscope_assets()
+
+# --- 3. CORE 1989 COLOR LABELER ENGINE ---
+# Calibrated RGB anchors derived directly from the color_layer.png palette
+COLOR_ANCHORS = {
+    "upper epidermis": [247, 197, 40],
+    "palisade mesophyll": [32, 146, 20],
+    "spongy mesophyll": [177, 226, 117],
+    "midrib ground-tissue parenchyma": [211, 241, 197],
+    "bundle sheath and vascular-associated tissue": [232, 141, 17],
+    "xylem": [234, 36, 35],
+    "phloem": [16, 98, 227],
+    "sclerenchyma/collenchyma support tissue": [144, 95, 175],
+    "lower epidermis": [150, 100, 40],
+    "cuticle": [160, 158, 161],
+    "intercellular space / background": [254, 254, 254],
+    "cell wall boundary line": [0, 0, 0]
+}
+
+def identify_tissue_by_color(rgb_pixel):
+    distances = {}
+    for tissue_name, anchor_rgb in COLOR_ANCHORS.items():
+        dist = np.linalg.norm(np.array(rgb_pixel) - np.array(anchor_rgb))
+        distances[tissue_name] = dist
+    return min(distances, key=distances.get)
+
+# --- 4. DYNAMIC RENDERING LENSES ---
 def apply_lens(img, lens_type):
     if lens_type == "Wall Density Profile (High Contrast)":
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
@@ -84,115 +92,136 @@ def apply_lens(img, lens_type):
     
     return img
 
-# --- 4. USER INTERFACE LAYOUT ---
+# --- 5. USER INTERFACE LAYOUT ---
 st.title("🔬 AI Microscope Learning Environment")
-st.caption(debug_msg)  # Display image loading status cleanly right under the title
+st.caption(status_msg)
 st.markdown("---")
 
-if st.session_state.pivot_triggered:
-    col_left, col_right = st.columns([3, 2])
+if leaf_img is None or mask_img is None:
+    st.error("Please ensure both your visual photo (`leaf_section.jpg`) and your colored underlay (`color_layer.png`) are committed to your GitHub repository root directory to start.")
 else:
-    col_left, col_right = st.columns([5, 0.1])
+    h, w, _ = leaf_img.shape
+    mask_h, mask_w, _ = mask_img.shape
 
-with col_left:
-    # --- CONSOLIDATED CONTROL BENCH ---
-    st.write("### 🎛️ Microscope Bench Controls")
-    ctrl_col1, ctrl_col2 = st.columns(2)
-    
-    with ctrl_col1:
-        objective_lens = st.selectbox(
-            "🔄 Rotate Microscope Objective Turret:",
-            options=["4x (Scanning Objective)", "10x (Low Power Objective)", "40x (High Power Objective)"],
-            index=1
-        )
-    
-    with ctrl_col2:
-        # The tool tray now sits prominently on the main bench right next to the turret select box
-        if len(st.session_state.unlocked_tools) > 1:
-            st.session_state.active_lens = st.radio(
-                "🛠️ Unlocked Accessory Tray (Alternative Lenses):",
-                options=st.session_state.unlocked_tools,
-                horizontal=True
-            )
-        else:
-            st.info("🛠️ *Accessory Tray: Empty. Alternative diagnostic visualization filters will unlock here if you encounter structural roadblocks.*")
-
-    zoom_map = {"4x (Scanning Objective)": 1.0, "10x (Low Power Objective)": 2.0, "40x (High Power Objective)": 4.5}
-    zoom = zoom_map[objective_lens]
-    crop_size = int(min(h, w) / zoom)
-    
-    # Safe Stage Axis Calculations
-    y_min, y_max = int(crop_size / 2), int(h - crop_size / 2)
-    if y_min >= y_max:
-        y_center = y_min
-        st.caption("↔️ *Vertical Stage: Locked to Center (Full specimen height fits inside viewport)*")
+    if st.session_state.pivot_triggered:
+        col_left, col_right = st.columns([3, 2])
     else:
-        y_center = st.slider("Stage Vertical Position (Y-Axis Coordinate)", min_value=y_min, max_value=y_max, value=int(h/2))
+        col_left, col_right = st.columns([5, 0.1])
+
+    with col_left:
+        st.write("### 🎛️ Microscope Bench Controls")
+        ctrl_col1, ctrl_col2 = st.columns(2)
         
-    x_min, x_max = int(crop_size / 2), int(w - crop_size / 2)
-    if x_min >= x_max:
-        x_center = x_min
-        st.caption("↔️ *Horizontal Stage: Locked to Center (Full specimen width fits inside viewport)*")
-    else:
-        x_center = st.slider("Stage Horizontal Position (X-Axis Coordinate)", min_value=x_min, max_value=x_max, value=int(w/2))
-    
-    # Render view window
-    y1, y2 = y_center - int(crop_size/2), y_center + int(crop_size/2)
-    x1, x2 = x_center - int(crop_size/2), x_center + int(crop_size/2)
-    cropped_img = raw_img[y1:y2, x1:x2]
-    
-    processed_img = apply_lens(cropped_img, st.session_state.active_lens)
-    st.image(processed_img, use_container_width=True)
-    st.caption(f"**Microscope Viewport Status:** Active display canvas is {w}x{h} total pixels. Currently rendering a {crop_size}x{crop_size} regional snapshot.")
-    
-    st.markdown("---")
-    st.write("🔧 *Prototype Telemetry Controls*")
-    
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        if st.button("Simulate Active Scanning"):
-            st.session_state.stall_time = 0
-            st.toast("Telemetry received: User actively exploring.")
-    with c2:
-        if st.button("Simulate 90-Second Stall"):
-            st.session_state.stall_time = 95
-            if st.session_state.stall_time > 90 and not st.session_state.target_found:
-                st.session_state.pivot_triggered = True
-                st.rerun()
-    with c3:
-        if (h * 0.35) <= y_center <= (h * 0.80):
+        with ctrl_col1:
+            objective_lens = st.selectbox(
+                "🔄 Rotate Microscope Objective Turret:",
+                options=["4x (Scanning Objective)", "10x (Low Power Objective)", "40x (High Power Objective)"],
+                index=1
+            )
+        
+        with ctrl_col2:
+            if len(st.session_state.unlocked_tools) > 1:
+                st.session_state.active_lens = st.radio(
+                    "🛠️ Unlocked Accessory Tray (Alternative Lenses):",
+                    options=st.session_state.unlocked_tools,
+                    horizontal=True
+                )
+            else:
+                st.info("🛠️ *Accessory Tray: Empty. Diagnostic tools will unlock here if you experience a structural roadblock.*")
+
+        # Map Objective Magnification
+        zoom_map = {"4x (Scanning Objective)": 1.0, "10x (Low Power Objective)": 2.0, "40x (High Power Objective)": 4.5}
+        zoom = zoom_map[objective_lens]
+        crop_size = int(min(h, w) / zoom)
+        
+        # Adaptive Stage Sliders
+        y_min, y_max = int(crop_size / 2), int(h - crop_size / 2)
+        y_center = y_min if y_min >= y_max else st.slider("Stage Vertical Position (Y-Axis)", min_value=y_min, max_value=y_max, value=int(h/2))
+            
+        x_min, x_max = int(crop_size / 2), int(w - crop_size / 2)
+        x_center = x_min if x_min >= x_max else st.slider("Stage Horizontal Position (X-Axis)", min_value=x_min, max_value=x_max, value=int(w/2))
+        
+        # Crop Viewport from Main Photo
+        y1, y2 = y_center - int(crop_size/2), y_center + int(crop_size/2)
+        x1, x2 = x_center - int(crop_size/2), x_center + int(crop_size/2)
+        cropped_img = leaf_img[y1:y2, x1:x2]
+        
+        processed_img = apply_lens(cropped_img, st.session_state.active_lens)
+        st.image(processed_img, use_container_width=True)
+        st.caption(f"**Microscope Status:** Actively rendering a {crop_size}x{crop_size} micron window centered at coordinate ({x_center}, {y_center}).")
+        
+        # --- PROTOTYPE EVALUATION ENGINE ---
+        st.markdown("---")
+        st.write("🔧 *System Feedback Framework*")
+        
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            if st.button("Simulate Active Scanning"):
+                st.session_state.stall_time = 0
+                st.toast("Telemetry received: User actively exploring.")
+        with c2:
+            if st.button("Simulate 90-Second Stall"):
+                st.session_state.stall_time = 95
+                if st.session_state.stall_time > 90 and not st.session_state.target_found:
+                    st.session_state.pivot_triggered = True
+                    st.rerun()
+        with c3:
+            # INTERPRETIVE GRADING EVENT (1989 METAPHOR)
             if st.button("🎯 Submit Current Viewport Coordinates", type="primary"):
-                st.session_state.target_found = True
-                st.success("Correct! You've located the loose, irregular cells of the Spongy Mesophyll.")
-        else:
-            if st.button("🎯 Submit Current Viewport Coordinates", type="secondary"):
-                st.error("Target not found at these coordinates. Review cell shapes and positions.")
+                # 1. Translate active visual coordinates to relative percentage positions
+                pct_x = x_center / w
+                pct_y = y_center / h
+                
+                # 2. Scale percentages to target indices on the interpretation mask image
+                target_mask_x = int(pct_x * mask_w)
+                target_mask_y = int(pct_y * mask_h)
+                
+                # Boundary clamping safety
+                target_mask_x = max(0, min(target_mask_x, mask_w - 1))
+                target_mask_y = max(0, min(target_mask_y, mask_h - 1))
+                
+                # 3. Read the underlying RGB vector color signature
+                sampled_rgb = mask_img[target_mask_y, target_mask_x][:3]
+                
+                # 4. Classify via the 1989 Color Key Keypad
+                detected_layer = identify_tissue_by_color(sampled_rgb)
+                
+                # 5. Route educational logic response
+                if detected_layer == "spongy mesophyll":
+                    st.session_state.target_found = True
+                    st.success("🎉 Excellent interpretation! The color map confirms your coordinates sit squarely within the loose, irregular cells of the Spongy Mesophyll layer.")
+                elif detected_layer == "cell wall boundary line":
+                    st.warning("🧐 **Anatomical Boundary Hit:** You submitted coordinates right on a dark cell wall line or boundary. Nudge the stage position adjustments slightly to land directly inside a cell's interior chamber.")
+                elif detected_layer == "intercellular space / background":
+                    st.info("💨 **Intercellular Void Hit:** You are currently aiming inside an empty atmospheric pocket or a hollow vessel lumen. Adjust your focus dials slightly to pick up a neighboring parenchymal cellular body.")
+                else:
+                    st.error(f"❌ **Misalignment Detoured:** Your microscope target is currently positioned inside the **{detected_layer.upper()}** layer instead. Re-examine the cell shape signatures and slide the stage accordingly.")
 
-# --- 5. THE SOCRATIC PIVOT ---
-if st.session_state.pivot_triggered and not st.session_state.target_found:
-    with col_right:
-        st.error("🤖 AI Microscope Co-Pilot Intervening")
-        st.info(
-            "🗣️ **Audio Script Broadcast:**\n\n"
-            "\"I might not have highlighted the structural map well enough for this slide. "
-            "We can pull up the gas exchange module here to see how these cells cooperate with air spaces, "
-            "or I can give you a direct visual clue. What is your preference?\""
-        )
-        
-        choice = st.radio("Choose your resolution path:", ["Select an option...", "Open the Visual Diagnostic Palette", "Get a Direct Structural Clue"])
-        
-        if choice == "Get a Direct Structural Clue":
-            st.warning("💡 **Clue:** Look lower than the tightly packed, vertical column cells (Palisade Layer). The cells you want are rounded, irregular, and surrounded by large empty air pockets.")
-        
-        elif choice == "Open the Visual Diagnostic Palette":
-            st.success("🔓 Alternative Visual Toolkit Unlocked")
-            st.session_state.unlocked_tools = ["Standard View", "Wall Density Profile (High Contrast)", "Geometric Borders (Outline Map)"]
-            
-            st.session_state.active_lens = st.selectbox(
-                "Select a lens filter to apply back to your primary viewport:", 
-                options=st.session_state.unlocked_tools
+    # --- 6. THE SOCRATIC PIVOT ---
+    if st.session_state.pivot_triggered and not st.session_state.target_found:
+        with col_right:
+            st.error("🤖 AI Microscope Co-Pilot Intervening")
+            st.info(
+                "🗣️ **Audio Script Broadcast:**\n\n"
+                "\"I might not have highlighted the structural map well enough for this slide. "
+                "We can pull up the gas exchange module here to see how these cells cooperate with air spaces, "
+                "or I can give you a direct visual clue. What is your preference?\""
             )
             
-            if st.button("Close Palette and Return to Full Screen"):
-                st.session_state.pivot_triggered = False
-                st.rerun()
+            choice = st.radio("Choose your resolution path:", ["Select an option...", "Open the Visual Diagnostic Palette", "Get a Direct Structural Clue"])
+            
+            if choice == "Get a Direct Structural Clue":
+                st.warning("💡 **Clue:** Look lower than the tightly packed, vertical column cells (Palisade Layer). The cells you want are rounded, irregular, and surrounded by large empty air pockets.")
+            
+            elif choice == "Open the Visual Diagnostic Palette":
+                st.success("🔓 Alternative Visual Toolkit Unlocked")
+                st.session_state.unlocked_tools = ["Standard View", "Wall Density Profile (High Contrast)", "Geometric Borders (Outline Map)"]
+                
+                st.session_state.active_lens = st.selectbox(
+                    "Select a lens filter to apply back to your primary viewport:", 
+                    options=st.session_state.unlocked_tools
+                )
+                
+                if st.button("Close Palette and Return to Full Screen"):
+                    st.session_state.pivot_triggered = False
+                    st.rerun()
