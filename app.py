@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 from PIL import Image
 import os
+from streamlit_image_coordinates import streamlit_image_coordinates
 
 # --- 1. PAGE CONFIGURATION & INITIAL STATE ---
 st.set_page_config(layout="wide", page_title="AI Microscope Dashboard")
@@ -18,6 +19,12 @@ if "active_lens" not in st.session_state:
     st.session_state.active_lens = "Standard View"
 if "unlocked_tools" not in st.session_state:
     st.session_state.unlocked_tools = ["Standard View"]
+
+# Initialize persistent stage coordinates in session state if not set
+if "x_stage" not in st.session_state:
+    st.session_state.x_stage = -1
+if "y_stage" not in st.session_state:
+    st.session_state.y_stage = -1
 
 # --- 2. THE DUAL-IMAGE BOTANICAL ENGINE ---
 def load_microscope_assets():
@@ -36,15 +43,12 @@ def load_microscope_assets():
             break
 
     if not leaf_file or not mask_file:
-        missing = []
-        if not leaf_file: missing.append("`leaf_section.jpg`")
-        if not mask_file: missing.append("`color_layer.png`")
-        return None, None, f"⚠️ Missing required assets in repository root: {', '.join(missing)}"
+        return None, None, "⚠️ Missing leaf_section.jpg or color_layer.png in GitHub root."
 
     try:
         leaf_img = np.array(Image.open(leaf_file))
         mask_img = np.array(Image.open(mask_file))
-        return leaf_img, mask_img, f"🎯 **System Live:** Paired `{leaf_file}` with interpretive map `{mask_file}`."
+        return leaf_img, mask_img, f"🎯 **System Live:** Navigation map calibrated using `{leaf_file}`."
     except Exception as e:
         return None, None, f"❌ Error initializing image buffers: {str(e)}"
 
@@ -88,10 +92,10 @@ def apply_lens(img, lens_type):
     
     return img
 
-
-# --- 5. FIXED PERSISTENT DASHBOARD LAYOUT ---
+# --- 5. VISUAL INTERFACE LAYOUT ---
 st.title("🔬 AI Microscope Learning Environment")
 st.caption(status_msg)
+st.markdown("---")
 
 if leaf_img is None or mask_img is None:
     st.error("Please ensure both your visual photo (`leaf_section.jpg`) and your colored underlay (`color_layer.png`) are committed to your GitHub repository root.")
@@ -99,17 +103,20 @@ else:
     h, w, _ = leaf_img.shape
     mask_h, mask_w, _ = mask_img.shape
 
-    # Establish our layout grid configuration
-    if st.session_state.pivot_triggered:
-        # 3 Columns active: Viewport (Left), Controls (Center), Co-Pilot (Right)
-        col_view, col_ctrl, col_pivot = st.columns([4, 3, 3])
-    else:
-        # 2 Columns active: Viewport (Left), Controls (Center), Hidden Spacer (Right)
-        col_view, col_ctrl, col_pivot = st.columns([5, 3, 0.1])
+    # Set default center coordinates upon first startup
+    if st.session_state.x_stage == -1 or st.session_state.y_stage == -1:
+        st.session_state.x_stage = int(w / 2)
+        st.session_state.y_stage = int(h / 2)
 
-    # --- EXECUTION PASS 1: THE CONTROL DECK (CENTER COLUMN) ---
+    # Establish layout grid split
+    if st.session_state.pivot_triggered:
+        col_view, col_ctrl, col_pivot = st.columns([4.5, 3.5, 3])
+    else:
+        col_view, col_ctrl, col_pivot = st.columns([5.5, 3.5, 0.1])
+
+    # --- PASS 1: SYSTEM CONTROLS & MINI-MAP MOUSE NAVIGATOR (CENTER) ---
     with col_ctrl:
-        st.write("### 🎛️ Bench Control Deck")
+        st.write("### 🎛️ Microscope Bench Controls")
         
         objective_lens = st.selectbox(
             "🔄 Rotate Microscope Objective Turret:",
@@ -117,39 +124,67 @@ else:
             index=1
         )
         
-        zoom_map = {"4x (Scanning Objective)": 1.0, "10x (Low Power Objective)": 2.0, "40x (High Power Objective)": 4.5}
+        zoom_map = {"4x (Scanning Objective)": 1.0, "10x (Low Power Objective)": 2.2, "40x (High Power Objective)": 5.0}
         zoom = zoom_map[objective_lens]
         crop_size = int(min(h, w) / zoom)
         
-        # Calculate safe mechanical stage constraints
-        y_min, y_max = int(crop_size / 2), int(h - crop_size / 2)
-        x_min, x_max = int(crop_size / 2), int(w - crop_size / 2)
+        # Calculate bounding boundaries based on current selection
+        half_crop = int(crop_size / 2)
+        y_min, y_max = half_crop, h - half_crop
+        x_min, x_max = half_crop, w - half_crop
         
-        st.markdown("**Stage Navigation Clamps:**")
-        if y_min >= y_max:
-            y_center = y_min
-            st.caption("↕️ *Vertical Stage: Centered & Locked*")
-        else:
-            y_center = st.slider("Vertical Axis (Y-Center)", min_value=y_min, max_value=y_max, value=int(h/2))
+        # Force clamp current positions inside safe operating bounds
+        st.session_state.y_stage = max(y_min, min(st.session_state.y_stage, y_max))
+        st.session_state.x_stage = max(x_min, min(st.session_state.x_stage, x_max))
+        
+        # --- GENERATE THE INTERACTIVE MAP OVERVIEW ---
+        st.markdown("**🗺️ Specimen Overview Map (Click anywhere to center target):**")
+        
+        # Build an overlay graphic copy for navigation orientation
+        map_canvas = leaf_img.copy()
+        
+        # Draw the target box showing the high-magnification window boundaries
+        box_y1 = st.session_state.y_stage - half_crop
+        box_y2 = st.session_state.y_stage + half_crop
+        box_x1 = st.session_state.x_stage - half_crop
+        box_x2 = st.session_state.x_stage + half_crop
+        cv2.rectangle(map_canvas, (box_x1, box_y1), (box_x2, box_y2), (230, 40, 40), 6) # Red Box
+        
+        # Add a small anchor center point dot
+        cv2.circle(map_canvas, (st.session_state.x_stage, st.session_state.y_stage), 12, (230, 40, 40), -1)
+        
+        # Resize canvas to a standard, predictable thumbnail size for display tracking
+        thumb_w = 400
+        thumb_h = int(h * (thumb_w / w))
+        map_thumb = cv2.resize(map_canvas, (thumb_w, thumb_h))
+        
+        # Render the map and listen continuously for mouse click vector inputs
+        click_data = streamlit_image_coordinates(map_thumb, key="macro_map_click")
+        
+        if click_data:
+            # Scale the thumbnail click coordinates back up to full image pixel constraints
+            calculated_x = int((click_data["x"] / thumb_w) * w)
+            calculated_y = int((click_data["y"] / thumb_h) * h)
             
-        if x_min >= x_max:
-            x_center = x_min
-            st.caption("↔️ *Horizontal Stage: Centered & Locked*")
-        else:
-            x_center = st.slider("Horizontal Axis (X-Center)", min_value=x_min, max_value=x_max, value=int(w/2))
-            
+            # If coordinates shifted, update positions and force instant window update
+            if calculated_x != st.session_state.x_stage or calculated_y != st.session_state.y_stage:
+                st.session_state.x_stage = max(x_min, min(calculated_x, x_max))
+                st.session_state.y_stage = max(y_min, min(calculated_y, y_max))
+                st.date_index = time.time()  # Cache busting token
+                st.rerun()
+
+        st.caption(f"📍 **Current Stage Center Coordinate:** X: `{st.session_state.x_stage}`, Y: `{st.session_state.y_stage}`")
+        
         if len(st.session_state.unlocked_tools) > 1:
             st.session_state.active_lens = st.radio(
-                "🛠️ Lens Filter Select:",
-                options=st.session_state.unlocked_tools,
-                horizontal=True
+                "🛠️ Lens Filter Select:", options=st.session_state.unlocked_tools, horizontal=True
             )
             
-        # PRIMARY CALL TO ACTION (Positioned right under the sliders)
+        # PRIMARY GRADING INTERACTION
         st.markdown("---")
-        if st.button("🎯 Submit Current Viewport Coordinates", type="primary", use_container_width=True):
-            pct_x = x_center / w
-            pct_y = y_center / h
+        if st.button("🎯 Submit Center Crosshair Target", type="primary", use_container_width=True):
+            pct_x = st.session_state.x_stage / w
+            pct_y = st.session_state.y_stage / h
             
             target_mask_x = max(0, min(int(pct_x * mask_w), mask_w - 1))
             target_mask_y = max(0, min(int(pct_y * mask_h), mask_h - 1))
@@ -159,42 +194,45 @@ else:
             
             if detected_layer == "spongy mesophyll":
                 st.session_state.target_found = True
-                st.success("🎉 **Correct Interpretation!** The color map confirms your target is directly inside the loose Spongy Mesophyll tissue layer.")
+                st.success("🎉 **Correct Interpretation!** Your crosshair target is centered inside the loose Spongy Mesophyll tissue layer.")
             elif detected_layer == "cell wall boundary line":
-                st.warning("🧐 **Boundary Hit:** You landed right on a dark cell wall line. Nudge the stage coordinate sliders slightly to slide deep inside a cell chamber.")
+                st.warning("🧐 **Boundary Hit:** Your target crosshair is touching a dark cell wall line. Click slightly inside a cell interior chamber to submit.")
             elif detected_layer == "intercellular space / background":
-                st.info("💨 **Atmospheric Space Hit:** You are targeting an empty intercellular air pocket or vessel lumen. Shift the stage position slightly to acquire a distinct cellular body.")
+                st.info("💨 **Atmospheric Space Hit:** You are targeting an empty intercellular air pocket. Use the overview map to acquire a distinct cell body.")
             else:
-                st.error(f"❌ **Tissue Misalignment:** Your target coordinates are sitting inside the **{detected_layer.upper()}** layer instead. Adjust your stage vertical axis to track down the irregular parenchyma.")
+                st.error(f"❌ **Tissue Misalignment:** Target is sitting inside the **{detected_layer.upper()}** layer instead. Click the low-power zone below the palisade columns.")
 
-        # COMPACT COLLAPSIBLE EXPANDER FOR TESTING TELEMETRY
         with st.expander("🔧 Backend Telemetry Simulation Tools"):
             tc1, tc2 = st.columns(2)
             with tc1:
-                if st.button("Active Scan Signal", use_container_width=True):
-                    st.session_state.stall_time = 0
-                    st.toast("Telemetry refreshed.")
+                if st.button("Active Scan Signal", use_container_width=True): st.session_state.stall_time = 0
             with tc2:
                 if st.button("90-Sec Stall Signal", use_container_width=True):
                     st.session_state.stall_time = 95
-                    if not st.session_state.target_found:
-                        st.session_state.pivot_triggered = True
-                        st.rerun()
+                    if not st.session_state.target_found: st.session_state.pivot_triggered = True; st.rerun()
 
-    # --- EXECUTION PASS 2: THE MICROSCOPE VIEWPORT (LEFT COLUMN) ---
+    # --- PASS 2: THE HIGH-POWER MICROSCOPE VIEWPORT WITH CENTER RETICLE (LEFT) ---
     with col_view:
         st.write("### 🔬 Microscope Viewport")
         
-        # Safely slice coordinate matrices using values evaluated in the Control Deck column
-        y1, y2 = y_center - int(crop_size/2), y_center + int(crop_size/2)
-        x1, x2 = x_center - int(crop_size/2), x_center + int(crop_size/2)
-        cropped_img = leaf_img[y1:y2, x1:x2]
+        # Calculate viewport frame bounds safely
+        y1 = st.session_state.y_stage - half_crop
+        y2 = st.session_state.y_stage + half_crop
+        x1 = st.session_state.x_stage - half_crop
+        x2 = st.session_state.x_stage + half_crop
         
-        processed_img = apply_lens(cropped_img, st.session_state.active_lens)
+        cropped_img = leaf_img[y1:y2, x1:x2]
+        processed_img = apply_lens(cropped_img, st.session_state.active_lens).copy()
+        
+        # Draw a subtle optical target reticle/crosshair right in the center of the student's field of view
+        vh, vw, _ = processed_img.shape
+        cx, cy = int(vw / 2), int(vh / 2)
+        cv2.drawMarker(processed_img, (cx, cy), (240, 50, 50), markerType=cv2.MARKER_CROSS, markerSize=30, thickness=2)
+        
         st.image(processed_img, use_container_width=True)
-        st.caption(f"**Optics Engine Status:** Viewing a {crop_size}x{crop_size} pixel region on the specimen canvas.")
+        st.caption("🔬 *Viewport Reticle Active: The red crosshair marks your absolute coordinate submission center point.*")
 
-    # --- EXECUTION PASS 3: THE SOCRATIC PIVOT (RIGHT COLUMN) ---
+    # --- PASS 3: THE SOCRATIC PIVOT (RIGHT) ---
     if st.session_state.pivot_triggered and not st.session_state.target_found:
         with col_pivot:
             st.error("🤖 AI Microscope Co-Pilot Intervening")
@@ -215,10 +253,8 @@ else:
                 st.session_state.unlocked_tools = ["Standard View", "Wall Density Profile (High Contrast)", "Geometric Borders (Outline Map)"]
                 
                 st.session_state.active_lens = st.selectbox(
-                    "Select alternative lens filter profile:", 
-                    options=st.session_state.unlocked_tools
+                    "Select alternative lens filter profile:", options=st.session_state.unlocked_tools
                 )
                 
                 if st.button("Close Palette & Lock Tray", use_container_width=True):
-                    st.session_state.pivot_triggered = False
-                    st.rerun()
+                    st.session_state.pivot_triggered = False; st.rerun()
