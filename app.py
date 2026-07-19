@@ -22,15 +22,22 @@ if "unlocked_tools" not in st.session_state:
 # --- 2. LOAD BOTANICAL MICROGRAPH DATA ---
 @st.cache_data
 def load_micrograph():
-    # Fetching a public domain brightfield light micrograph of a leaf cross-section
-    url = "https://upload.wikimedia.org/wikipedia/commons/e/e0/Leaf_anatomy_with_labels_small.jpg"
-    with urllib.request.urlopen(url) as req:
-        img = Image.open(req)
-    return np.array(img)
-
-raw_img = load_micrograph()
-h, w, _ = raw_img.shape
-
+    # Primary Choice: If you upload your own image to your repo, use it natively
+    try:
+        img = Image.open("leaf_section.jpg")
+        return np.array(img)
+    except FileNotFoundError:
+        # Secondary Choice: Fallback to the web image if no local file exists
+        url = "https://upload.wikimedia.org/wikipedia/commons/e/e0/Leaf_anatomy_with_labels_small.jpg"
+        
+        # We explicitly add a User-Agent header to bypass automated scraping blocks
+        req = urllib.request.Request(
+            url, 
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AI-Microscope-Bot/1.0'}
+        )
+        with urllib.request.urlopen(req) as response:
+            img = Image.open(response)
+        return np.array(img)
 # --- 3. DYNAMIC RENDERING LENSES (IMAGE PROCESSING) ---
 def apply_lens(img, lens_type):
     if lens_type == "Wall Density Profile (High Contrast)":
