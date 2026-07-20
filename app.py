@@ -186,7 +186,8 @@ def generate_ai_commentary(action_type, tissue_layer, target_assignment):
             st.toast(f"🎙️ Assistant: {ai_text}")
             return ai_text.replace('"', '')
         else:
-            st.error(f"Gemini API Status Error: {response.status_code}")
+            # 🌟 ALTER THIS LINE TO PRINT THE EXACT ERROR DETAILS FROM GOOGLE
+            st.error(f"Gemini API Status Error: {response.status_code} - Details: {response.text}")
     except Exception as e:
         st.error(f"Gemini API Network Exception: {str(e)}")
         
