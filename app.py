@@ -243,7 +243,6 @@ else:
                 trigger_dynamic_audio_feedback(ai_speech)
                 
                 st.date_index = time.time()
-                st.rerun()
 
         st.caption(f"📍 Target Anchor Coordinate: ({st.session_state.x_stage}, {st.session_state.y_stage})")
 
