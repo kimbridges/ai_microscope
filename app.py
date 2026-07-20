@@ -8,11 +8,11 @@ import os
 import requests
 from streamlit_image_coordinates import streamlit_image_coordinates
 
-# --- DYNAMIC GEMINI TEXT GENERATOR ---
+# --- DYNAMIC GEMINI TEXT GENERATOR WITH TELEMETRY VARIABILITY ---
 def generate_ai_commentary(action_type, tissue_layer):
     """
     Calls the Gemini API to generate a brief, unique, non-canned comment
-    based on the student's current interaction.
+    based on the student's current interaction and telemetry history.
     """
     if "GEMINI_API_KEY" not in st.secrets:
         return f"Telemetry notice: {action_type} inside the {tissue_layer}."
@@ -20,13 +20,23 @@ def generate_ai_commentary(action_type, tissue_layer):
     api_key = st.secrets["GEMINI_API_KEY"]
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     
-    # Simple, direct prompt to ensure varied, short responses
-    prompt = f"""
-    You are an interactive AI microscope assistant. The student just performed this action: "{action_type}" 
-    on this botanical tissue layer: "{tissue_layer}".
+    # Extract the last few telemetry actions to provide history context to Gemini
+    history_context = ""
+    if "telemetry_log" in st.session_state and st.session_state.telemetry_log:
+        recent = st.session_state.telemetry_log[-3:]
+        history_context = " -> ".join([f"{h['action']} on {h['layer']}" for h in recent])
     
-    Generate a brief, conversational spoken observation or hint (maximum 15 words). 
-    Vary your phrasing and style so it does not sound like a canned template. Be slightly spontaneous.
+    # A robust prompt demanding unique, dynamic prose style every single time
+    prompt = f"""
+    You are an interactive, spontaneous AI microscope mentor. 
+    The student just performed this action: "{action_type}" on this tissue layer: "{tissue_layer}".
+    Recent student movement path: [{history_context}]
+    
+    Task: Write a single, brief observation or comment (maximum 12 words).
+    Strict Rules: 
+    1. NEVER repeat the same phrasing consecutively. 
+    2. Vary your stylistic tone (e.g., sound academic, then curious, then encouraging, then observational). 
+    3. Seamlessly weave the current tissue layer name "{tissue_layer}" into a natural sentence.
     """
     
     headers = {"Content-Type": "application/json"}
@@ -40,8 +50,7 @@ def generate_ai_commentary(action_type, tissue_layer):
     except Exception:
         pass
         
-    # Fallback if API fails
-    return f"Observing the {tissue_layer} via {action_type}."
+    return f"Observing the {tissue_layer} layer."
 
 # --- DYNAMIC ELEVENLABS AUDIO FEEDBACK GENERATOR ---
 def trigger_dynamic_audio_feedback(text_script):
@@ -66,7 +75,7 @@ def trigger_dynamic_audio_feedback(text_script):
     data = {
         "text": text_script,
         "model_id": "eleven_flash_v2_5",
-        "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}
+        "voice_settings": {"stability": 0.45, "similarity_boost": 0.8}
     }
     
     try:
@@ -213,12 +222,11 @@ else:
                 st.session_state.telemetry_log.append({"action": "Navigate Map", "layer": nav_layer, "timestamp": time.time()})
                 st.session_state.last_action_time = time.time()
                 
-                # 🧠 1. Ask Gemini what to say, then 🔊 2. Feed it to Rachel
+                # 🧠 1. Fetch variant text prompt from Gemini -> 🔊 2. Stream through ElevenLabs
                 ai_speech = generate_ai_commentary(action_type="Navigation", tissue_layer=nav_layer)
                 trigger_dynamic_audio_feedback(ai_speech)
                 
-                st.date_index = time.time()
-                st.rerun()
+                # 🛑 REMOVED MANUAL ST.RERUN() TO AVOID BUFFER TRUNCATION
 
         st.caption(f"📍 Target Anchor Coordinate: ({st.session_state.x_stage}, {st.session_state.y_stage})")
 
@@ -233,7 +241,7 @@ else:
             st.session_state.telemetry_log.append({"action": "Submit Target", "layer": detected_layer, "timestamp": time.time()})
             st.session_state.last_action_time = time.time()
             
-            # 🧠 1. Ask Gemini what to say, then 🔊 2. Feed it to Rachel
+            # 🧠 1. Fetch variant text prompt from Gemini -> 🔊 2. Stream through ElevenLabs
             ai_speech = generate_ai_commentary(action_type="Final Answer Submission", tissue_layer=detected_layer)
             trigger_dynamic_audio_feedback(ai_speech)
             
