@@ -315,9 +315,9 @@ else:
         )
     st.session_state.active_lens = lens_mode
 
-    # Zoom & Crop Math (Locked strictly to uniform scaling factors)
-    zoom = {"4x (Scanning)": 1.0, "10x (Low Power)": 2.5, "40x (High Power)": 6.0}[objective_lens]
-    crop_size = int(w / zoom)
+    # Zoom & Crop Math (Fixed: 4X is wide overview context, 40X is tight zoom)
+    zoom = {"4x (Scanning)": 0.5, "10x (Low Power)": 2.0, "40x (High Power)": 6.0}[objective_lens]
+    crop_size = int(w / zoom) if zoom < 1.0 else int(min(h, w) / zoom)
     half_crop = int(crop_size / 2)
     
     st.session_state.x_stage = max(half_crop, min(st.session_state.x_stage, w - half_crop))
@@ -326,27 +326,25 @@ else:
     # --- SINGLE VIEWPORT CANVAS ---
     st.markdown(f"### 🔬 Microscope Viewport ({objective_lens} - Click anywhere to center)")
     
-    y1 = st.session_state.y_stage - half_crop
-    y2 = st.session_state.y_stage + half_crop
-    x1 = st.session_state.x_stage - half_crop
-    x2 = st.session_state.x_stage + half_crop
+    y1 = max(0, st.session_state.y_stage - half_crop)
+    y2 = min(h, st.session_state.y_stage + half_crop)
+    x1 = max(0, st.session_state.x_stage - half_crop)
+    x2 = min(w, st.session_state.x_stage + half_crop)
     
     cropped_img = leaf_img[y1:y2, x1:x2]
     cropped_mask = mask_img[y1:y2, x1:x2]
     
-    # Force exact square dimensions to prevent stretching across all magnifications
     target_dim = min(cropped_img.shape[0], cropped_img.shape[1])
-    cropped_img = cv2.resize(cropped_img, (target_dim, target_dim))
-    cropped_mask = cv2.resize(cropped_mask, (target_dim, target_dim), interpolation=cv2.INTER_NEAREST)
+    if cropped_img.shape[0] != target_dim or cropped_img.shape[1] != target_dim:
+        cropped_img = cv2.resize(cropped_img, (target_dim, target_dim))
+        cropped_mask = cv2.resize(cropped_mask, (target_dim, target_dim), interpolation=cv2.INTER_NEAREST)
 
     processed_img = apply_lens(cropped_img, st.session_state.active_lens).copy()
     
     vh, vw, _ = processed_img.shape
-    # Draw prominent size-50 crosshair dead center
     cv2.drawMarker(processed_img, (int(vw / 2), int(vh / 2)), (240, 50, 50), markerType=cv2.MARKER_CROSS, markerSize=50, thickness=3)
     
-    # Unified interactive widget
-    viewport_click = streamlit_image_coordinates(processed_img, key=f"single_viewport_{objective_lens}")
+    viewport_click = streamlit_image_coordinates(processed_img, key=f"viewport_canvas_{objective_lens}")
     if viewport_click:
         local_x = viewport_click["x"]
         local_y = viewport_click["y"]
@@ -355,12 +353,12 @@ else:
         new_global_x = int(x1 + (local_x * scale_factor))
         new_global_y = int(y1 + (local_y * scale_factor))
         
-        if new_global_x != st.session_state.x_stage or new_global_y != st.session_state.y_stage:
+        if abs(new_global_x - st.session_state.x_stage) > 2 or abs(new_global_y - st.session_state.y_stage) > 2:
             st.session_state.x_stage = max(half_crop, min(new_global_x, w - half_crop))
             st.session_state.y_stage = max(half_crop, min(new_global_y, h - half_crop))
             
             nav_layer = identify_tissue_by_color(mask_img[st.session_state.y_stage, st.session_state.x_stage][:3])
-            st.session_state.telemetry_log.append({"action": "Single Canvas Click", "layer": nav_layer, "timestamp": time.time()})
+            st.session_state.telemetry_log.append({"action": "Canvas Click", "layer": nav_layer, "timestamp": time.time()})
             st.session_state.active_audio = generate_ai_commentary("Viewport Navigation", nav_layer, selected_target_key)
             st.rerun()
 
