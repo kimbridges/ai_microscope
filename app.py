@@ -368,6 +368,44 @@ else:
 
     with col_view:
         st.write("### 🔬 Microscope Viewport (Click anywhere to center)")
+        
+        # 1. HANDLE VIEWPORT CLICKS FIRST BEFORE CALCULATING CROPS
+        # We render the current crop, capture any click, and if a click occurs, 
+        # we update the stage coordinates and immediately rerun before drawing.
+        y1_pre, y2_pre = st.session_state.y_stage - half_crop, st.session_state.y_stage + half_crop
+        x1_pre, x2_pre = st.session_state.x_stage - half_crop, st.session_state.x_stage + half_crop
+        
+        cropped_pre = leaf_img[y1_pre:y2_pre, x1_pre:x2_pre]
+        processed_pre = apply_lens(cropped_pre, st.session_state.active_lens).copy()
+        
+        if overlay_opacity > 0:
+            alpha, beta = (100 - overlay_opacity) / 100.0, overlay_opacity / 100.0
+            processed_pre = cv2.addWeighted(processed_pre, alpha, mask_img[y1_pre:y2_pre, x1_pre:x2_pre, :3], beta, 0)
+            
+        vh, vw, _ = processed_pre.shape
+        cv2.drawMarker(processed_pre, (int(vw / 2), int(vh / 2)), (240, 50, 50), markerType=cv2.MARKER_CROSS, markerSize=50, thickness=3)
+        
+        viewport_click = streamlit_image_coordinates(processed_pre, key="viewport_micro_click")
+        if viewport_click:
+            clicked_local_x = viewport_click["x"]
+            clicked_local_y = viewport_click["y"]
+            
+            new_global_x = x1_pre + int(clicked_local_x)
+            new_global_y = y1_pre + int(clicked_local_y)
+            
+            if new_global_x != st.session_state.x_stage or new_global_y != st.session_state.y_stage:
+                st.session_state.x_stage = max(half_crop, min(new_global_x, w - half_crop))
+                st.session_state.y_stage = max(half_crop, min(new_global_y, h - half_crop))
+                
+                # Sample the exact new layer at the new coordinates immediately
+                nav_layer = identify_tissue_by_color(mask_img[st.session_state.y_stage, st.session_state.x_stage][:3])
+                st.session_state.telemetry_log.append({"action": "Viewport Micro-Click", "layer": nav_layer, "timestamp": time.time()})
+                
+                # Generate audio explicitly for the newly targeted cell
+                st.session_state.active_audio = generate_ai_commentary("Viewport Navigation", nav_layer, selected_target_key)
+                st.rerun()
+
+        # 2. RENDER FINAL VIEWPORT WITH UPDATED STAGE STATE
         y1, y2 = st.session_state.y_stage - half_crop, st.session_state.y_stage + half_crop
         x1, x2 = st.session_state.x_stage - half_crop, st.session_state.x_stage + half_crop
         
@@ -378,29 +416,8 @@ else:
         if overlay_opacity > 0:
             alpha, beta = (100 - overlay_opacity) / 100.0, overlay_opacity / 100.0
             processed_img = cv2.addWeighted(processed_img, alpha, cropped_mask[:, :, :3], beta, 0)
-        
-        # 🌟 ERGONOMIC UPGRADE: Enlarge crosshair size (markerSize=50, thickness=3) for high visibility
-        vh, vw, _ = processed_img.shape
+            
         cv2.drawMarker(processed_img, (int(vw / 2), int(vh / 2)), (240, 50, 50), markerType=cv2.MARKER_CROSS, markerSize=50, thickness=3)
-        
-        # 🌟 ERGONOMIC UPGRADE: Enable direct click-to-recenter coordinates on the main zoomed viewport
-        viewport_click = streamlit_image_coordinates(processed_img, key="viewport_micro_click")
-        if viewport_click:
-            # Map click offset relative to the cropped window back to global image coordinates
-            clicked_local_x = viewport_click["x"]
-            clicked_local_y = viewport_click["y"]
-            
-            new_global_x = x1 + int(clicked_local_x)
-            new_global_y = y1 + int(clicked_local_y)
-            
-            if new_global_x != st.session_state.x_stage or new_global_y != st.session_state.y_stage:
-                st.session_state.x_stage = max(half_crop, min(new_global_x, w - half_crop))
-                st.session_state.y_stage = max(half_crop, min(new_global_y, h - half_crop))
-                
-                nav_layer = identify_tissue_by_color(mask_img[st.session_state.y_stage, st.session_state.x_stage][:3])
-                st.session_state.telemetry_log.append({"action": "Viewport Micro-Click", "layer": nav_layer, "timestamp": time.time()})
-                
-                st.session_state.active_audio = generate_ai_commentary("Viewport Navigation", nav_layer, selected_target_key)
-                st.rerun()
+        st.image(processed_img, use_container_width=True)
 
     play_queued_audio()
