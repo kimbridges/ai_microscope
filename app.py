@@ -215,14 +215,12 @@ def play_queued_audio():
         pass
 
 # --- 3. PAGE CONFIGURATION & INITIAL STATE ---
-st.set_page_config(layout="wide", page_title="AI Microscope Dashboard")
+st.set_page_config(layout="centered", page_title="AI Microscope Dashboard")
 
 if "target_found" not in st.session_state:
     st.session_state.target_found = False
 if "active_lens" not in st.session_state:
     st.session_state.active_lens = "Standard View"
-if "unlocked_tools" not in st.session_state:
-    st.session_state.unlocked_tools = ["Standard View"]
 if "x_stage" not in st.session_state:
     st.session_state.x_stage = -1
 if "y_stage" not in st.session_state:
@@ -232,7 +230,7 @@ if "telemetry_log" not in st.session_state:
 if "active_audio" not in st.session_state:
     st.session_state.active_audio = None
 
-# --- 4. DUAL-IMAGE BOTANICAL ENGINE & ZOOM NORMALIZATION ---
+# --- 4. ASSET LOADER ---
 def load_microscope_assets():
     repo_files = os.listdir(".")
     leaf_file = next((f for f in ["leaf_section.jpg", "leaf_section.jpeg", "leaf_section.JPG", "leaf_section.PNG"] if f in repo_files), None)
@@ -281,7 +279,7 @@ def apply_lens(img, lens_type):
         return cv2.cvtColor(inverted, cv2.COLOR_GRAY2RGB)
     return img
 
-# --- 5. VISUAL INTERFACE LAYOUT & UNIFIED VIEWPORT ENGINE ---
+# --- 5. SINGLE-CANVAS VERTICAL MOBILE-FIRST LAYOUT ---
 st.title("🔬 AI Microscope Learning Environment")
 st.caption(status_msg)
 st.markdown("---")
@@ -293,127 +291,91 @@ else:
     if st.session_state.x_stage == -1 or st.session_state.y_stage == -1:
         st.session_state.x_stage, st.session_state.y_stage = int(w / 2), int(h / 2)
 
-    col_view, col_ctrl, _ = st.columns([5.5, 3.5, 0.1])
-    overlay_opacity = 0
-
-    with col_ctrl:
-        st.write("### 🎛️ Microscope Bench Controls")
-        
-        assignment_options = {k: f"{v['analog']} ({k.title()})" for k, v in BOTANICAL_LORE.items()}
-        selected_target_key = st.selectbox(
-            "🎯 Select Your Lab Investigation Objective:",
-            options=list(assignment_options.keys()),
-            format_func=lambda x: assignment_options[x],
-            index=2 
-        )
-        
+    # --- TOP CONTROLS STACKED VERTICALLY ---
+    assignment_options = {k: f"{v['analog']} ({k.title()})" for k, v in BOTANICAL_LORE.items()}
+    selected_target_key = st.selectbox(
+        "🎯 Select Your Lab Investigation Objective:",
+        options=list(assignment_options.keys()),
+        format_func=lambda x: assignment_options[x],
+        index=2 
+    )
+    
+    col_c1, col_c2 = st.columns(2)
+    with col_c1:
         objective_lens = st.selectbox(
-            "🔄 Rotate Microscope Objective Turret:",
-            options=["4x (Scanning Objective)", "10x (Low Power Objective)", "40x (High Power Objective)"],
+            "🔄 Turret Objective:",
+            options=["4x (Scanning)", "10x (Low Power)", "40x (High Power)"],
             index=1
         )
-        
-        # 🌟 ASPECT RATIO LOCK: Base crop sizing strictly on a square dimension factor
-        zoom = {"4x (Scanning Objective)": 1.0, "10x (Low Power Objective)": 2.2, "40x (High Power Objective)": 5.0}[objective_lens]
-        base_box_dim = int(min(h, w) / 2.0) # Ensures a uniform base geometry
-        crop_size = int(base_box_dim / zoom)
-        half_crop = int(crop_size / 2)
-        
-        st.session_state.y_stage = max(half_crop, min(st.session_state.y_stage, h - half_crop))
-        st.session_state.x_stage = max(half_crop, min(st.session_state.x_stage, w - half_crop))
-        
-        st.markdown("**🗺️ Specimen Overview Map (Click to re-center):**")
-        map_canvas = leaf_img.copy()
-        cv2.rectangle(map_canvas, (st.session_state.x_stage - half_crop, st.session_state.y_stage - half_crop), 
-                      (st.session_state.x_stage + half_crop, st.session_state.y_stage + half_crop), (230, 40, 40), 6)
-        
-        thumb_w = 400
-        thumb_h = int(h * (thumb_w / w))
-        map_thumb = cv2.resize(map_canvas, (thumb_w, thumb_h))
-        
-        macro_click = streamlit_image_coordinates(map_thumb, key="macro_map_click")
-        if macro_click:
-            calculated_x = int((macro_click["x"] / thumb_w) * w)
-            calculated_y = int((macro_click["y"] / thumb_h) * h)
-            if calculated_x != st.session_state.x_stage or calculated_y != st.session_state.y_stage:
-                st.session_state.x_stage = max(half_crop, min(calculated_x, w - half_crop))
-                st.session_state.y_stage = max(half_crop, min(calculated_y, h - half_crop))
-                
-                nav_layer = identify_tissue_by_color(mask_img[st.session_state.y_stage, st.session_state.x_stage][:3])
-                st.session_state.telemetry_log.append({"action": "Navigate Map", "layer": nav_layer, "timestamp": time.time()})
-                st.session_state.active_audio = generate_ai_commentary("Navigation", nav_layer, selected_target_key)
-                st.rerun()
+    with col_c2:
+        lens_mode = st.selectbox(
+            "🔬 View Mode:",
+            options=["Standard View", "Wall Density Profile (High Contrast)", "Geometric Borders (Outline Map)"],
+            index=0
+        )
+    st.session_state.active_lens = lens_mode
 
-        st.caption(f"📍 Target Anchor Coordinate: ({st.session_state.x_stage}, {st.session_state.y_stage})")
-            
-        st.markdown("---")
-        if st.button("🎯 Submit Center Crosshair Target", type="primary", use_container_width=True):
-            sampled_rgb = mask_img[st.session_state.y_stage, st.session_state.x_stage][:3]
-            detected_layer = identify_tissue_by_color(sampled_rgb)
-            
-            st.session_state.telemetry_log.append({"action": "Submit Target", "layer": detected_layer, "timestamp": time.time()})
-            st.session_state.active_audio = generate_ai_commentary("Final Answer Submission", detected_layer, selected_target_key)
-            
-            if detected_layer == selected_target_key:
-                st.session_state.target_found = True
-                st.success(f"🎉 **Correct Interpretation!** Successfully verified the {detected_layer.upper()}.")
-            else:
-                st.error(f"❌ **Tissue Misalignment:** Target is resting in the {detected_layer.upper()} instead of your objective.")
+    # Zoom & Crop Math (Locked strictly to uniform scaling factors)
+    zoom = {"4x (Scanning)": 1.0, "10x (Low Power)": 2.5, "40x (High Power)": 6.0}[objective_lens]
+    crop_size = int(w / zoom)
+    half_crop = int(crop_size / 2)
+    
+    st.session_state.x_stage = max(half_crop, min(st.session_state.x_stage, w - half_crop))
+    st.session_state.y_stage = max(half_crop, min(st.session_state.y_stage, h - half_crop))
 
-        st.markdown("---")
-        with st.expander("🛠️ Developer / Alignment Debug Tools", expanded=False):
-            overlay_opacity = st.slider("Map Overlay Opacity (Alpha Blend)", min_value=0, max_value=100, value=0, step=5)
-            st.write("**Live Telemetry History:**")
-            if st.session_state.telemetry_log:
-                for entry in st.session_state.telemetry_log[-3:]:
-                    st.text(f"⏱️ {time.strftime('%H:%M:%S', time.localtime(entry['timestamp']))} | {entry['action']} -> {entry['layer']}")
+    # --- SINGLE VIEWPORT CANVAS ---
+    st.markdown(f"### 🔬 Microscope Viewport ({objective_lens} - Click anywhere to center)")
+    
+    y1 = st.session_state.y_stage - half_crop
+    y2 = st.session_state.y_stage + half_crop
+    x1 = st.session_state.x_stage - half_crop
+    x2 = st.session_state.x_stage + half_crop
+    
+    cropped_img = leaf_img[y1:y2, x1:x2]
+    cropped_mask = mask_img[y1:y2, x1:x2]
+    
+    # Force exact square dimensions to prevent stretching across all magnifications
+    target_dim = min(cropped_img.shape[0], cropped_img.shape[1])
+    cropped_img = cv2.resize(cropped_img, (target_dim, target_dim))
+    cropped_mask = cv2.resize(cropped_mask, (target_dim, target_dim), interpolation=cv2.INTER_NEAREST)
 
-    with col_view:
-        st.write("### 🔬 Microscope Viewport (Click anywhere to center)")
+    processed_img = apply_lens(cropped_img, st.session_state.active_lens).copy()
+    
+    vh, vw, _ = processed_img.shape
+    # Draw prominent size-50 crosshair dead center
+    cv2.drawMarker(processed_img, (int(vw / 2), int(vh / 2)), (240, 50, 50), markerType=cv2.MARKER_CROSS, markerSize=50, thickness=3)
+    
+    # Unified interactive widget
+    viewport_click = streamlit_image_coordinates(processed_img, key=f"single_viewport_{objective_lens}")
+    if viewport_click:
+        local_x = viewport_click["x"]
+        local_y = viewport_click["y"]
         
-        # 🌟 STRICT SQUARE BOUNDARY EXTRACTION
-        y1 = max(0, st.session_state.y_stage - half_crop)
-        y2 = min(h, st.session_state.y_stage + half_crop)
-        x1 = max(0, st.session_state.x_stage - half_crop)
-        x2 = min(w, st.session_state.x_stage + half_crop)
+        scale_factor = target_dim / vw if vw > 0 else 1.0
+        new_global_x = int(x1 + (local_x * scale_factor))
+        new_global_y = int(y1 + (local_y * scale_factor))
         
-        cropped_img = leaf_img[y1:y2, x1:x2]
-        cropped_mask = mask_img[y1:y2, x1:x2]
-        
-        # Force exact square sizing via interpolation if boundaries clip at edges
-        if cropped_img.shape[0] != cropped_img.shape[1]:
-            target_dim = min(cropped_img.shape[0], cropped_img.shape[1])
-            cropped_img = cv2.resize(cropped_img, (target_dim, target_dim))
-            cropped_mask = cv2.resize(cropped_mask, (target_dim, target_dim), interpolation=cv2.INTER_NEAREST)
+        if new_global_x != st.session_state.x_stage or new_global_y != st.session_state.y_stage:
+            st.session_state.x_stage = max(half_crop, min(new_global_x, w - half_crop))
+            st.session_state.y_stage = max(half_crop, min(new_global_y, h - half_crop))
+            
+            nav_layer = identify_tissue_by_color(mask_img[st.session_state.y_stage, st.session_state.x_stage][:3])
+            st.session_state.telemetry_log.append({"action": "Single Canvas Click", "layer": nav_layer, "timestamp": time.time()})
+            st.session_state.active_audio = generate_ai_commentary("Viewport Navigation", nav_layer, selected_target_key)
+            st.rerun()
 
-        processed_img = apply_lens(cropped_img, st.session_state.active_lens).copy()
+    st.markdown("---")
+    if st.button("🎯 Submit Center Crosshair Target", type="primary", use_container_width=True):
+        sampled_rgb = mask_img[st.session_state.y_stage, st.session_state.x_stage][:3]
+        detected_layer = identify_tissue_by_color(sampled_rgb)
         
-        if overlay_opacity > 0:
-            alpha, beta = (100 - overlay_opacity) / 100.0, overlay_opacity / 100.0
-            processed_img = cv2.addWeighted(processed_img, alpha, cropped_mask[:, :, :3], beta, 0)
+        st.session_state.telemetry_log.append({"action": "Submit Target", "layer": detected_layer, "timestamp": time.time()})
+        st.session_state.active_audio = generate_ai_commentary("Final Answer Submission", detected_layer, selected_target_key)
         
-        vh, vw, _ = processed_img.shape
-        # Prominent size-50 crosshair locked strictly to the calculated center
-        cv2.drawMarker(processed_img, (int(vw / 2), int(vh / 2)), (240, 50, 50), markerType=cv2.MARKER_CROSS, markerSize=50, thickness=3)
-        
-        # Unified interactive viewport container element with explicit sizing key
-        viewport_click = streamlit_image_coordinates(processed_img, key=f"viewport_click_{objective_lens}")
-        if viewport_click:
-            clicked_local_x = viewport_click["x"]
-            clicked_local_y = viewport_click["y"]
-            
-            # Scale coordinates accurately back to global image space
-            scale_factor = (x2 - x1) / vw if vw > 0 else 1.0
-            new_global_x = int(x1 + (clicked_local_x * scale_factor))
-            new_global_y = int(y1 + (clicked_local_y * scale_factor))
-            
-            if new_global_x != st.session_state.x_stage or new_global_y != st.session_state.y_stage:
-                st.session_state.x_stage = max(half_crop, min(new_global_x, w - half_crop))
-                st.session_state.y_stage = max(half_crop, min(new_global_y, h - half_crop))
-                
-                nav_layer = identify_tissue_by_color(mask_img[st.session_state.y_stage, st.session_state.x_stage][:3])
-                st.session_state.telemetry_log.append({"action": "Viewport Micro-Click", "layer": nav_layer, "timestamp": time.time()})
-                st.session_state.active_audio = generate_ai_commentary("Viewport Navigation", nav_layer, selected_target_key)
-                st.rerun()
+        if detected_layer == selected_target_key:
+            st.session_state.target_found = True
+            st.success(f"🎉 **Correct Interpretation!** Successfully verified the {detected_layer.upper()}.")
+        else:
+            st.error(f"❌ **Tissue Misalignment:** Target is resting in the {detected_layer.upper()} instead of your objective.")
 
     play_queued_audio()
