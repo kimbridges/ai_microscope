@@ -158,30 +158,29 @@ def generate_ai_commentary(action_type, tissue_layer):
     current_lore = BOTANICAL_LORE.get(tissue_layer, {"analog": "Unknown Space", "literal_meaning": "Layer", "narrative": ""})
     
     # Compile history
-    history_context = ""
+   # Pull recent moves safely
+    history_list = []
     if "telemetry_log" in st.session_state and st.session_state.telemetry_log:
-        recent = st.session_state.telemetry_log[-3:]
-        history_context = " then ".join([f"{h['action']} on {h['layer']}" for h in recent])
+        for h in st.session_state.telemetry_log[-3:]:
+            history_list.append(f"{h['action']} on {h['layer']}")
+    history_context = " then ".join(history_list) if history_list else "None yet"
     
-    # The strict, anti-hallucination instruction prompt
-    prompt = f"""
-    You are a private, supportive botanical lab assistant speaking into the student's headphones.
-    The student's active engineering objective is to locate: {target_assignment} (Analog: {goal_lore['analog']}).
-    They just clicked coordinates that resolved to this tissue type: {tissue_layer} (Analog: {current_lore['analog']}).
-    Their recent navigation history: [{history_context}]
-    
-    DETERMINISTIC KNOWLEDGE BASE (Use ONLY these facts to construct observations):
-    - Current Location Function: {current_lore['narrative']}
-    - Current Location Etymology/Root: {current_lore['literal_meaning']}
-    
-    TASK: Write a natural, brief observation (maximum 18 words) spoken directly to the user's headset.
-    
-    STRICT PEDAGOGICAL GUIDELINES:
-    1. NEVER use text phrases like "Telemetry notice", "Incorrect", "Wrong answer", or "You are looking at". 
-    2. Act as a conversational assistant, not an evaluator.
-    3. If they hit the target, congratulate their spatial deduction naturally using the analogy.
-    4. If they missed, use the 'Current Location Function' or 'Etymology' common-sense analogs to explain what this specific layer achieves mechanically for the plant, then gently steer their attention toward the target.
-    """
+    # 🌟 CLEANED PROMPT STRIPPING LITERAL ARRAY BRACKETS TO PREVENT PARSING ERRORS
+    prompt = (
+        "You are a private, supportive botanical lab assistant speaking into the student's headphones.\n"
+        f"The student's active engineering objective is to locate: {target_assignment} (Analog: {goal_lore['analog']}).\n"
+        f"They just clicked coordinates that resolved to this tissue type: {tissue_layer} (Analog: {current_lore['analog']}).\n"
+        f"Their recent navigation history: {history_context}\n\n"
+        "DETERMINISTIC KNOWLEDGE BASE (Use ONLY these facts to construct observations):\n"
+        f"- Current Location Function: {current_lore['narrative']}\n"
+        f"- Current Location Etymology/Root: {current_lore['literal_meaning']}\n\n"
+        "TASK: Write a natural, brief observation (maximum 18 words) spoken directly to the user's headset.\n\n"
+        "STRICT PEDAGOGICAL GUIDELINES:\n"
+        "1. NEVER use text phrases like 'Telemetry notice', 'Incorrect', 'Wrong answer', or 'You are looking at'.\n"
+        "2. Act as a conversational assistant, not an evaluator.\n"
+        "3. If they hit the target, congratulate their spatial deduction naturally using the analogy.\n"
+        "4. If they missed, use the 'Current Location Function' or 'Etymology' common-sense analogs to explain what this specific layer achieves mechanically for the plant, then gently steer their attention toward the target."
+    )
     
     headers = {"Content-Type": "application/json"}
     payload = {
@@ -193,9 +192,13 @@ def generate_ai_commentary(action_type, tissue_layer):
         if response.status_code == 200:
             result = response.json()
             ai_text = result['candidates'][0]['content']['parts'][0]['text'].strip()
+            # 🧪 DEBUG ASSIST: Print it on screen so we can see it during the test cycle
+            st.toast(f"🎙️ Assistant: {ai_text}")
             return ai_text.replace('"', '')
-    except Exception:
-        pass
+        else:
+            st.error(f"Gemini API Status Error: {response.status_code}")
+    except Exception as e:
+        st.error(f"Gemini API Network Exception: {str(e)}")
         
     # Fallback structure matching the repository analog format if network drops
     return f"Inspecting the {current_lore['analog']} structure."
