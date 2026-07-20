@@ -8,8 +8,7 @@ import os
 import requests
 from streamlit_image_coordinates import streamlit_image_coordinates
 
-# --- DYNAMIC GEMINI TEXT GENERATOR WITH TELEMETRY VARIABILITY ---
-# --- DYNAMIC GEMINI TEXT GENERATOR WITH ADVANCED VARIABILITY ---
+# --- 1. DYNAMIC GEMINI TEXT GENERATOR WITH ADVANCED VARIABILITY ---
 def generate_ai_commentary(action_type, tissue_layer):
     """
     Calls the Gemini 1.5 Flash API to generate a brief, unique, 
@@ -19,8 +18,6 @@ def generate_ai_commentary(action_type, tissue_layer):
         return f"Telemetry notice: {action_type} inside the {tissue_layer}."
         
     api_key = st.secrets["GEMINI_API_KEY"]
-    
-    # Updated direct v1 endpoint for 1.5-flash
     url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
     
     # Pull recent moves to give Gemini conversational awareness
@@ -59,22 +56,60 @@ def generate_ai_commentary(action_type, tissue_layer):
         response = requests.post(url, json=payload, headers=headers, timeout=8)
         if response.status_code == 200:
             result = response.json()
-            # Extract text safely from the Google API structure
             ai_text = result['candidates'][0]['content']['parts'][0]['text'].strip()
-            # Clean up any stray quotes the AI might wrap the text in
             return ai_text.replace('"', '').replace('"', '')
         else:
-            # If the API key is invalid or rejected, show it on screen for debugging
-            st.toast(f"⚠️ Gemini API Status Code: {response.status_code} - {response.text[:50]}")
+            st.toast(f"⚠️ Gemini API Status Code: {response.status_code}")
     except Exception as e:
         st.toast(f"⚠️ Gemini Connection Timeout: {str(e)[:50]}")
         
-    # Fallback with minor random injection so it still varies even if network drops
+    # Smart contextual fallback with random token selection if network drops
     random_tokens = ["Observing", "Analyzing", "Gliding over", "Inspecting"]
     token = random_tokens[int(time.time()) % len(random_tokens)]
     return f"{token} the {tissue_layer} region."
 
-# --- 1. PAGE CONFIGURATION & INITIAL STATE ---
+# --- 2. DYNAMIC ELEVENLABS AUDIO FEEDBACK GENERATOR ---
+def trigger_dynamic_audio_feedback(text_script):
+    """
+    Sends the generated AI text response to the ElevenLabs API,
+    synthesizes speech on the fly, and injects the raw binary bytes.
+    """
+    if "ELEVENLABS_API_KEY" not in st.secrets:
+        st.error("Missing ELEVENLABS_API_KEY in Streamlit Secrets.")
+        return
+        
+    api_key = st.secrets["ELEVENLABS_API_KEY"]
+    voice_id = "21m00Tcm4TlvDq8ikWAM" # Rachel
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    
+    headers = {
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": api_key
+    }
+    
+    data = {
+        "text": text_script,
+        "model_id": "eleven_flash_v2_5",
+        "voice_settings": {"stability": 0.45, "similarity_boost": 0.8}
+    }
+    
+    try:
+        response = requests.post(url, json=data, headers=headers, timeout=10)
+        if response.status_code == 200:
+            audio_base64 = base64.b64encode(response.content).decode("utf-8")
+            audio_html = f"""
+                <audio autoplay style="display:none;">
+                    <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+                </audio>
+            """
+            st.components.v1.html(audio_html, height=0, width=0)
+        else:
+            st.error(f"ElevenLabs Error: {response.status_code}")
+    except Exception as e:
+        st.error(f"TTS pipeline failed: {str(e)}")
+
+# --- 3. PAGE CONFIGURATION & INITIAL STATE ---
 st.set_page_config(layout="wide", page_title="AI Microscope Dashboard")
 
 if "stall_time" not in st.session_state:
@@ -98,7 +133,7 @@ if "telemetry_log" not in st.session_state:
 if "last_action_time" not in st.session_state:
     st.session_state.last_action_time = time.time()
 
-# --- 2. THE DUAL-IMAGE BOTANICAL ENGINE ---
+# --- 4. THE DUAL-IMAGE BOTANICAL ENGINE ---
 def load_microscope_assets():
     repo_files = os.listdir(".")
     leaf_file = next((f for f in ["leaf_section.jpg", "leaf_section.jpeg", "leaf_section.JPG", "leaf_section.PNG"] if f in repo_files), None)
@@ -118,7 +153,7 @@ def load_microscope_assets():
 
 leaf_img, mask_img, status_msg = load_microscope_assets()
 
-# --- 3. CORE 1989 COLOR LABELER CONFIGURATION ---
+# --- 5. CORE 1989 COLOR LABELER CONFIGURATION ---
 COLOR_ANCHORS = {
     "upper epidermis": [247, 197, 40],
     "palisade mesophyll": [32, 146, 20],
@@ -138,7 +173,7 @@ def identify_tissue_by_color(rgb_pixel):
     distances = {name: np.linalg.norm(np.array(rgb_pixel) - np.array(anchor)) for name, anchor in COLOR_ANCHORS.items()}
     return min(distances, key=distances.get)
 
-# --- 4. DYNAMIC RENDERING LENSES ---
+# --- 6. DYNAMIC RENDERING LENSES ---
 def apply_lens(img, lens_type):
     if lens_type == "Wall Density Profile (High Contrast)":
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
@@ -151,7 +186,7 @@ def apply_lens(img, lens_type):
         return cv2.cvtColor(inverted, cv2.COLOR_GRAY2RGB)
     return img
 
-# --- 5. VISUAL INTERFACE LAYOUT ---
+# --- 7. VISUAL INTERFACE LAYOUT ---
 st.title("🔬 AI Microscope Learning Environment")
 st.caption(status_msg)
 st.markdown("---")
@@ -203,11 +238,12 @@ else:
                 st.session_state.telemetry_log.append({"action": "Navigate Map", "layer": nav_layer, "timestamp": time.time()})
                 st.session_state.last_action_time = time.time()
                 
-                # 🧠 1. Fetch variant text prompt from Gemini -> 🔊 2. Stream through ElevenLabs
+                # Fetch dynamically varied prompt -> Synthesize audio via ElevenLabs
                 ai_speech = generate_ai_commentary(action_type="Navigation", tissue_layer=nav_layer)
                 trigger_dynamic_audio_feedback(ai_speech)
                 
-                # 🛑 REMOVED MANUAL ST.RERUN() TO AVOID BUFFER TRUNCATION
+                st.date_index = time.time()
+                st.rerun()
 
         st.caption(f"📍 Target Anchor Coordinate: ({st.session_state.x_stage}, {st.session_state.y_stage})")
 
@@ -222,7 +258,7 @@ else:
             st.session_state.telemetry_log.append({"action": "Submit Target", "layer": detected_layer, "timestamp": time.time()})
             st.session_state.last_action_time = time.time()
             
-            # 🧠 1. Fetch variant text prompt from Gemini -> 🔊 2. Stream through ElevenLabs
+            # Fetch dynamically varied prompt -> Synthesize audio via ElevenLabs[cite: 1]
             ai_speech = generate_ai_commentary(action_type="Final Answer Submission", tissue_layer=detected_layer)
             trigger_dynamic_audio_feedback(ai_speech)
             
