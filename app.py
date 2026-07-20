@@ -137,17 +137,12 @@ BOTANICAL_LORE = {
     }
 }
 
-# --- 1. DYNAMIC GEMINI TEXT GENERATOR WITH ADVANCED NARRATIVE SCAFFOLDING ---
+# --- 1. DYNAMIC GEMINI TEXT GENERATOR ---
 def generate_ai_commentary(action_type, tissue_layer, target_assignment):
-    """
-    Calls the Gemini 1.5 Flash API to generate private, auditory lab assistance.
-    Leverages the hardcoded BOTANICAL_LORE repository to eliminate hallucinations.
-    """
     if "GEMINI_API_KEY" not in st.secrets:
         return f"Telemetry notice: Standing inside the {tissue_layer} region."
         
     api_key = st.secrets["GEMINI_API_KEY"]
-    # 🌟 FIXED ENDPOINT: Unified on v1beta across all clicks
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
     
     goal_lore = BOTANICAL_LORE.get(target_assignment, {"analog": "Target", "narrative": ""})
@@ -183,13 +178,9 @@ def generate_ai_commentary(action_type, tissue_layer, target_assignment):
         if response.status_code == 200:
             result = response.json()
             ai_text = result['candidates'][0]['content']['parts'][0]['text'].strip()
-            st.toast(f"🎙️ Assistant: {ai_text}")
             return ai_text.replace('"', '')
-        else:
-            # 🌟 ALTER THIS LINE TO PRINT THE EXACT ERROR DETAILS FROM GOOGLE
-            st.error(f"Gemini API Status Error: {response.status_code} - Details: {response.text}")
-    except Exception as e:
-        st.error(f"Gemini API Network Exception: {str(e)}")
+    except Exception:
+        pass
         
     return f"Inspecting the {current_lore['analog']} structure."
 
@@ -201,7 +192,6 @@ def play_queued_audio():
     st.session_state.active_audio = None
 
     if "ELEVENLABS_API_KEY" not in st.secrets:
-        st.error("Missing ELEVENLABS_API_KEY in Streamlit Secrets.")
         return
         
     api_key = st.secrets["ELEVENLABS_API_KEY"]
@@ -308,13 +298,12 @@ else:
     with col_ctrl:
         st.write("### 🎛️ Microscope Bench Controls")
         
-        # 🌟 FEATURE UNLOCKED: Socratic Assignment Selector Dropdown
         assignment_options = {k: f"{v['analog']} ({k.title()})" for k, v in BOTANICAL_LORE.items()}
         selected_target_key = st.selectbox(
             "🎯 Select Your Lab Investigation Objective:",
             options=list(assignment_options.keys()),
             format_func=lambda x: assignment_options[x],
-            index=2 # Defaults to Palisade Mesophyll
+            index=2 
         )
         
         objective_lens = st.selectbox(
@@ -350,10 +339,7 @@ else:
                 nav_layer = identify_tissue_by_color(mask_img[st.session_state.y_stage, st.session_state.x_stage][:3])
                 st.session_state.telemetry_log.append({"action": "Navigate Map", "layer": nav_layer, "timestamp": time.time()})
                 
-                # 🧠 Pipeline execution passing the dynamic goal target
                 st.session_state.active_audio = generate_ai_commentary("Navigation", nav_layer, selected_target_key)
-                
-                st.date_index = time.time()
                 st.rerun()
 
         st.caption(f"📍 Target Anchor Coordinate: ({st.session_state.x_stage}, {st.session_state.y_stage})")
@@ -364,8 +350,6 @@ else:
             detected_layer = identify_tissue_by_color(sampled_rgb)
             
             st.session_state.telemetry_log.append({"action": "Submit Target", "layer": detected_layer, "timestamp": time.time()})
-            
-            # 🧠 Fixed Submit Pipeline: Now successfully utilizes v1beta dynamic parameters
             st.session_state.active_audio = generate_ai_commentary("Final Answer Submission", detected_layer, selected_target_key)
             
             if detected_layer == selected_target_key:
@@ -383,7 +367,7 @@ else:
                     st.text(f"⏱️ {time.strftime('%H:%M:%S', time.localtime(entry['timestamp']))} | {entry['action']} -> {entry['layer']}")
 
     with col_view:
-        st.write("### 🔬 Microscope Viewport")
+        st.write("### 🔬 Microscope Viewport (Click anywhere to center)")
         y1, y2 = st.session_state.y_stage - half_crop, st.session_state.y_stage + half_crop
         x1, x2 = st.session_state.x_stage - half_crop, st.session_state.x_stage + half_crop
         
@@ -395,8 +379,28 @@ else:
             alpha, beta = (100 - overlay_opacity) / 100.0, overlay_opacity / 100.0
             processed_img = cv2.addWeighted(processed_img, alpha, cropped_mask[:, :, :3], beta, 0)
         
+        # 🌟 ERGONOMIC UPGRADE: Enlarge crosshair size (markerSize=50, thickness=3) for high visibility
         vh, vw, _ = processed_img.shape
-        cv2.drawMarker(processed_img, (int(vw / 2), int(vh / 2)), (240, 50, 50), markerType=cv2.MARKER_CROSS, markerSize=30, thickness=2)
-        st.image(processed_img, use_container_width=True)
+        cv2.drawMarker(processed_img, (int(vw / 2), int(vh / 2)), (240, 50, 50), markerType=cv2.MARKER_CROSS, markerSize=50, thickness=3)
+        
+        # 🌟 ERGONOMIC UPGRADE: Enable direct click-to-recenter coordinates on the main zoomed viewport
+        viewport_click = streamlit_image_coordinates(processed_img, key="viewport_micro_click")
+        if viewport_click:
+            # Map click offset relative to the cropped window back to global image coordinates
+            clicked_local_x = viewport_click["x"]
+            clicked_local_y = viewport_click["y"]
+            
+            new_global_x = x1 + int(clicked_local_x)
+            new_global_y = y1 + int(clicked_local_y)
+            
+            if new_global_x != st.session_state.x_stage or new_global_y != st.session_state.y_stage:
+                st.session_state.x_stage = max(half_crop, min(new_global_x, w - half_crop))
+                st.session_state.y_stage = max(half_crop, min(new_global_y, h - half_crop))
+                
+                nav_layer = identify_tissue_by_color(mask_img[st.session_state.y_stage, st.session_state.x_stage][:3])
+                st.session_state.telemetry_log.append({"action": "Viewport Micro-Click", "layer": nav_layer, "timestamp": time.time()})
+                
+                st.session_state.active_audio = generate_ai_commentary("Viewport Navigation", nav_layer, selected_target_key)
+                st.rerun()
 
     play_queued_audio()
