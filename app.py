@@ -8,36 +8,179 @@ import os
 import requests
 from streamlit_image_coordinates import streamlit_image_coordinates
 
-# --- 1. DYNAMIC GEMINI TEXT GENERATOR WITH ADVANCED VARIABILITY ---
+# --- 0. THE NARRATIVE & ETYMOLOGICAL GROUND-TRUTH REPOSITORY ---
+BOTANICAL_LORE = {
+    "upper epidermis": {
+        "analog": "The Greenhouse Glass",
+        "literal_meaning": "Upper Over-Skin (From Greek 'epi' = upon/over, and 'derma' = skin)",
+        "narrative": (
+            "Think of the upper epidermis as the transparent glass roof of a massive solar factory. "
+            "Its primary job is to let maximum sunlight stream down into the machinery below while acting "
+            "as a secure physical shield against weather, microscopic invaders, and destructive UV rays. "
+            "To achieve this, the cells are packed tightly together side-by-side like continuous floor tiles, "
+            "and they remain completely clear—containing no green photosynthetic machinery of their own. "
+            "It is a pure structural window designed for protection and transparency."
+        )
+    },
+    "cuticle": {
+        "analog": "The Pool Liner / Waterproof Seal",
+        "literal_meaning": "Little Skin (From Latin 'cuticula')",
+        "narrative": (
+            "Because the leaf is constantly exposed to dry moving air and baking sunlight, it faces a "
+            "constant threat of drying out. To stop water from evaporating right through the roof, the plant "
+            "secretes a continuous, clear, waxy sheet across the very top of the epidermis. It behaves "
+            "exactly like a heavy-duty pool liner or a clear rubber laminate over a blueprint. Water molecules "
+            "cannot easily pierce this hydrophobic wax barrier, forcing the plant's moisture to stay inside "
+            "where it can be used for vital metabolic processes."
+        )
+    },
+    "palisade mesophyll": {
+        "analog": "The Solar Panel Array",
+        "literal_meaning": "The Middle-Leaf Defensive Wall (From Latin 'palus' = stake/post, and Greek 'meso-' = middle, '-phyllon' = leaf)",
+        "narrative": (
+            "To capture the absolute maximum amount of sunlight entering from above, the plant stands its "
+            "cellular machinery straight up on end—like tightly packed columns or defensive wooden stakes driven into "
+            "the ground side-by-side. This vertical architecture lets the light pass deeply down through the length "
+            "of each cell, packing thousands of green chloroplasts into the prime upper real estate to drive the "
+            "engines of photosynthesis without blocking out the lower levels."
+        )
+    },
+    "spongy mesophyll": {
+        "analog": "The Ventilation Network / Air Pockets",
+        "literal_meaning": "The Middle-Leaf Air-Sponge (From Greek 'spongia' = porous structure, and 'mesophyll' = middle leaf)",
+        "narrative": (
+            "For a factory to run, it needs an absolute mountain of raw ventilation to exchange carbon dioxide, "
+            "oxygen, and water vapor. Instead of packing cells tight like bricks, the plant builds a subterranean cavern, "
+            "shifting to loose, chaotic, wildly irregular shapes with massive empty spaces between them. It looks and "
+            "acts exactly like a kitchen sponge. This open-air network lets gases drift lazily and safely through "
+            "internal atmospheric pathways, brushing against wet, living cell walls where molecular gas exchange happens."
+        )
+    },
+    "xylem": {
+        "analog": "The High-Pressure Plumbing Main",
+        "literal_meaning": "The Woody Pipeline (From Greek 'xylon' = wood/timber)",
+        "narrative": (
+            "The plant moves water under extreme negative tension—pulling on a thin microscopic thread of liquid "
+            "lifted hundreds of feet from the soil. If you try to drink a thick milkshake through a flimsy paper straw, "
+            "the straw instantly collapses under the suction. To beat this physical constraint, xylem cells build heavy, "
+            "circular rings reinforced with lignin—the very compound that makes wood rigid. They then deliberately die, "
+            "leaving behind hollow, hardened, reinforced pipelines that can withstand immense suction pressure without imploding."
+        )
+    },
+    "phloem": {
+        "analog": "The Sugar Transit Conveyor",
+        "literal_meaning": "The Bark Packing Line (From Greek 'phloios' = inner bark)",
+        "narrative": (
+            "Once the solar panels produce rich, energetic sugars, that cargo needs to be exported down "
+            "to the roots, stems, and growing fruits. The phloem is the active outbound shipping lane. Unlike "
+            "the dead water pipes next to it, phloem conduits are alive, running on delicate osmotic pressure gradients. "
+            "It moves a thick, viscous sap through specialized microscopic sieve plates to distribute manufactured fuel."
+        )
+    },
+    "bundle sheath and vascular-associated tissue": {
+        "analog": "The Cargo Loading Dock / Security Terminal",
+        "literal_meaning": "Vascular Wrapper",
+        "narrative": (
+            "The fluid pipes carrying water and sugar cannot sit bare and exposed inside the turbulent, "
+            "air-filled spaces of the leaf. Instead, the plant encases the plumbing veins inside a tightly "
+            "knit protective collar of specialized cells. Think of this as a highly secure cargo loading dock or "
+            "customs terminal. Every molecule of water exiting the plumbing, and every molecule of manufactured sugar "
+            "entering it, must pass inspection through these gatekeeper cells, which also reinforce the veins against bending."
+        )
+    },
+    "lower epidermis": {
+        "analog": "The Secure Utility Vault",
+        "literal_meaning": "Lower Under-Skin",
+        "narrative": (
+            "The bottom floor of the leaf faces less direct scorching sunlight than the roof, making it the "
+            "delicate breathing floor. The lower epidermis acts like a secure utility vault floor. It maintains "
+            "the physical boundary of the leaf framework but is peppered with hundreds of microscopic, adjustable valve gates. "
+            "It keeps the internal architecture contained while managing the air intake system away from the baking heat."
+        )
+    },
+    "intercellular space / background": {
+        "analog": "The Ventilation Vaults / Breathing Chambers",
+        "literal_meaning": "Between-Cell Voids",
+        "narrative": (
+            "This isn't empty wasted space—it is a beautifully orchestrated atmospheric cavern. Carbon dioxide "
+            "needs room to drift freely around the living cells so it can be absorbed, and oxygen needs a clear pathway "
+            "to escape. By leaving massive internal gaps between the irregular cell walls, the plant creates an "
+            "internal atmosphere that is constantly humid and rich in gas circulation, acting like complex air ducts."
+        )
+    },
+    "cell wall boundary line": {
+        "analog": "The Structural Mortar / Property Lines",
+        "literal_meaning": "Cellular Perimeter",
+        "narrative": (
+            "These dark structural lines are the structural mortar holding the leaf factory together. They provide "
+            "the rigid mechanical boundary that shapes each cell and keeps the entire leaf flat and extended toward the light, "
+            "preventing structural collapse under gravity."
+        )
+    },
+    "midrib ground-tissue parenchyma": {
+        "analog": "The Central Chassis / Bulk Structural Filler",
+        "literal_meaning": "Poured-in-Beside Tissue (From Greek 'para' = beside, and 'enchyma' = poured infusion)",
+        "narrative": (
+            "This is the core packing material and shock absorber surrounding the main structural vein of the leaf. "
+            "It forms the central chassis that keeps the primary transport lines stable, functioning as a resilient, "
+            "fluid-filled cushion that gives the leaf its foundational bounce and thickness."
+        )
+    },
+    "sclerenchyma/collenchyma support tissue": {
+        "analog": "The Reinforced Steel I-Beams",
+        "literal_meaning": "Hardened Structural Tissue (From Greek 'skleros' = hard, and 'kolla' = glue)",
+        "narrative": (
+            "These are the heavy-duty structural reinforcement brackets of the leaf. They are thick, dense clusters "
+            "of support cells built specifically to brace the leaf against high winds and torsional strain. They act "
+            "exactly like structural steel I-beams or structural rebar welded onto the main chassis."
+        )
+    }
+}
+
+# --- 1. DYNAMIC GEMINI TEXT GENERATOR WITH ADVANCED NARRATIVE SCAFFOLDING ---
 def generate_ai_commentary(action_type, tissue_layer):
     """
-    Calls the Gemini 1.5 Flash API to generate a brief, unique, 
-    non-canned comment based on user interaction and history.
+    Calls the Gemini 1.5 Flash API to generate private, auditory lab assistance.
+    Leverages the hardcoded BOTANICAL_LORE repository to eliminate hallucinations
+    and drive high-variability Socratic dialogue based on functional engineering models.
     """
+    # 🧪 TEST HARNESS DEFAULT: Set assignment to Spongy Mesophyll for this test cycle
+    target_assignment = "spongy mesophyll"
+    
     if "GEMINI_API_KEY" not in st.secrets:
-        return f"Telemetry notice: {action_type} inside the {tissue_layer}."
+        return f"Telemetry notice: Standing inside the {tissue_layer} region."
         
     api_key = st.secrets["GEMINI_API_KEY"]
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     
-    # Pull recent moves to give Gemini conversational awareness
+    # Safely pull the deterministic structural data from our database
+    goal_lore = BOTANICAL_LORE.get(target_assignment, {"analog": "Target", "narrative": ""})
+    current_lore = BOTANICAL_LORE.get(tissue_layer, {"analog": "Unknown Space", "literal_meaning": "Layer", "narrative": ""})
+    
+    # Compile history
     history_context = ""
     if "telemetry_log" in st.session_state and st.session_state.telemetry_log:
         recent = st.session_state.telemetry_log[-3:]
         history_context = " then ".join([f"{h['action']} on {h['layer']}" for h in recent])
     
+    # The strict, anti-hallucination instruction prompt
     prompt = f"""
-    You are an enthusiastic, spontaneous AI botanical microscope mentor. 
-    The student just did a "{action_type}" and landed on the "{tissue_layer}".
-    Their recent path: [{history_context}]
+    You are a private, supportive botanical lab assistant speaking into the student's headphones.
+    The student's active engineering objective is to locate: {target_assignment} (Analog: {goal_lore['analog']}).
+    They just clicked coordinates that resolved to this tissue type: {tissue_layer} (Analog: {current_lore['analog']}).
+    Their recent navigation history: [{history_context}]
     
-    Task: Write a single, brief conversational observation (maximum 12 words).
+    DETERMINISTIC KNOWLEDGE BASE (Use ONLY these facts to construct observations):
+    - Current Location Function: {current_lore['narrative']}
+    - Current Location Etymology/Root: {current_lore['literal_meaning']}
     
-    STRICT VARIABILITY RULES:
-    1. NEVER start with "Telemetry notice", "You are looking at", or "Navigation inside".
-    2. Be spontaneous. Use casual academic phrasing, sudden curiosity, or brief encouragement.
-    3. Seamlessly wrap the layer name "{tissue_layer}" into a natural, unique sentence.
-    4. Do not repeat your phrasing structure if the history shows they are clicking around.
+    TASK: Write a natural, brief observation (maximum 18 words) spoken directly to the user's headset.
+    
+    STRICT PEDAGOGICAL GUIDELINES:
+    1. NEVER use text phrases like "Telemetry notice", "Incorrect", "Wrong answer", or "You are looking at". 
+    2. Act as a conversational assistant, not an evaluator.
+    3. If they hit the target, congratulate their spatial deduction naturally using the analogy.
+    4. If they missed, use the 'Current Location Function' or 'Etymology' common-sense analogs to explain what this specific layer achieves mechanically for the plant, then gently steer their attention toward the target.
     """
     
     headers = {"Content-Type": "application/json"}
@@ -50,13 +193,12 @@ def generate_ai_commentary(action_type, tissue_layer):
         if response.status_code == 200:
             result = response.json()
             ai_text = result['candidates'][0]['content']['parts'][0]['text'].strip()
-            return ai_text.replace('"', '').replace('"', '')
+            return ai_text.replace('"', '')
     except Exception:
         pass
         
-    random_tokens = ["Observing", "Analyzing", "Gliding over", "Inspecting"]
-    token = random_tokens[int(time.time()) % len(random_tokens)]
-    return f"{token} the {tissue_layer} region."
+    # Fallback structure matching the repository analog format if network drops
+    return f"Inspecting the {current_lore['analog']} structure."
 
 # --- 2. DYNAMIC ELEVENLABS AUDIO FEEDBACK GENERATOR ---
 def play_queued_audio():
