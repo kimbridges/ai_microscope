@@ -148,7 +148,7 @@ def generate_ai_commentary(action_type, tissue_layer, target_assignment):
         
     api_key = st.secrets["GEMINI_API_KEY"]
     # 🌟 FIXED ENDPOINT: Unified on v1beta across all clicks
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
     
     goal_lore = BOTANICAL_LORE.get(target_assignment, {"analog": "Target", "narrative": ""})
     current_lore = BOTANICAL_LORE.get(tissue_layer, {"analog": "Unknown Space", "literal_meaning": "Layer", "narrative": ""})
