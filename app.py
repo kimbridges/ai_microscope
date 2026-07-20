@@ -95,19 +95,17 @@ def trigger_dynamic_audio_feedback(text_script):
     }
     
     try:
-        response = requests.post(url, json=data, headers=headers, timeout=10)
+        response = requests.post(url, json=payload, headers=headers, timeout=8)
         if response.status_code == 200:
-            audio_base64 = base64.b64encode(response.content).decode("utf-8")
-            audio_html = f"""
-                <audio autoplay style="display:none;">
-                    <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
-                </audio>
-            """
-            st.components.v1.html(audio_html, height=0, width=0)
+            result = response.json()
+            ai_text = result['candidates'][0]['content']['parts'][0]['text'].strip()
+            return ai_text.replace('"', '').replace('"', '')
         else:
-            st.error(f"ElevenLabs Error: {response.status_code}")
+            # 🛑 EXPOSE API ERROR CODE DIRECTLY ON THE SCREEN
+            st.error(f"Gemini API Denied Request. Status: {response.status_code} - {response.text}")
     except Exception as e:
-        st.error(f"TTS pipeline failed: {str(e)}")
+        # 🛑 EXPOSE NETWORK TIMEOUTS OR CONNECTION ISSUES
+        st.error(f"Gemini Connection Failed: {str(e)}")
 
 # --- 3. PAGE CONFIGURATION & INITIAL STATE ---
 st.set_page_config(layout="wide", page_title="AI Microscope Dashboard")
