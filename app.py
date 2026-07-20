@@ -59,9 +59,9 @@ def generate_ai_commentary(action_type, tissue_layer):
             ai_text = result['candidates'][0]['content']['parts'][0]['text'].strip()
             return ai_text.replace('"', '').replace('"', '')
         else:
-            st.toast(f"⚠️ Gemini API Status Code: {response.status_code}")
+            st.error(f"Gemini API Denied Request. Status: {response.status_code} - {response.text}")
     except Exception as e:
-        st.toast(f"⚠️ Gemini Connection Timeout: {str(e)[:50]}")
+        st.error(f"Gemini Connection Failed: {str(e)}")
         
     # Smart contextual fallback with random token selection if network drops
     random_tokens = ["Observing", "Analyzing", "Gliding over", "Inspecting"]
