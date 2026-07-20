@@ -18,7 +18,7 @@ def generate_ai_commentary(action_type, tissue_layer):
         return f"Telemetry notice: {action_type} inside the {tissue_layer}."
         
     api_key = st.secrets["GEMINI_API_KEY"]
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
     
     # Pull recent moves to give Gemini conversational awareness
     history_context = ""
@@ -26,7 +26,6 @@ def generate_ai_commentary(action_type, tissue_layer):
         recent = st.session_state.telemetry_log[-3:]
         history_context = " then ".join([f"{h['action']} on {h['layer']}" for h in recent])
     
-    # An aggressive prompt forcing distinct vocabulary, styles, and phrasing
     prompt = f"""
     You are an enthusiastic, spontaneous AI botanical microscope mentor. 
     The student just did a "{action_type}" and landed on the "{tissue_layer}".
@@ -42,16 +41,8 @@ def generate_ai_commentary(action_type, tissue_layer):
     """
     
     headers = {"Content-Type": "application/json"}
-    
-    # 🌟 DEFINED PLAINLY AND EXPLICITLY HERE OUTSIDE THE TRY SCOPE 🌟
     payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt}
-                ]
-            }
-        ]
+        "contents": [{"parts": [{"text": prompt}]}]
     }
     
     try:
@@ -60,22 +51,28 @@ def generate_ai_commentary(action_type, tissue_layer):
             result = response.json()
             ai_text = result['candidates'][0]['content']['parts'][0]['text'].strip()
             return ai_text.replace('"', '').replace('"', '')
-        else:
-            st.error(f"Gemini API Denied Request. Status: {response.status_code} - {response.text}")
-    except Exception as e:
-        st.error(f"Gemini Connection Failed: {str(e)}")
+    except Exception:
+        pass
         
-    # Smart contextual fallback with random token selection if network drops
     random_tokens = ["Observing", "Analyzing", "Gliding over", "Inspecting"]
     token = random_tokens[int(time.time()) % len(random_tokens)]
     return f"{token} the {tissue_layer} region."
 
 # --- 2. DYNAMIC ELEVENLABS AUDIO FEEDBACK GENERATOR ---
-def trigger_dynamic_audio_feedback(text_script):
+def play_queued_audio():
     """
-    Sends the generated AI text response to the ElevenLabs API,
-    synthesizes speech on the fly, and injects the raw binary bytes.
+    Checks if there is a pending audio string in the state queue.
+    If found, synthesizes it via ElevenLabs, plays it, and instantly deletes it
+    to prevent infinite Streamlit rerun playback loops.
     """
+    if "active_audio" not in st.session_state or not st.session_state.active_audio:
+        return
+
+    text_script = st.session_state.active_audio
+    
+    # IMMEDIATELY FLUSH THE QUEUE so next rerun finds nothing
+    st.session_state.active_audio = None
+
     if "ELEVENLABS_API_KEY" not in st.secrets:
         st.error("Missing ELEVENLABS_API_KEY in Streamlit Secrets.")
         return
@@ -106,10 +103,8 @@ def trigger_dynamic_audio_feedback(text_script):
                 </audio>
             """
             st.components.v1.html(audio_html, height=0, width=0)
-        else:
-            st.error(f"ElevenLabs Error: {response.status_code}")
-    except Exception as e:
-        st.error(f"TTS pipeline failed: {str(e)}")
+    except Exception:
+        pass
 
 # --- 3. PAGE CONFIGURATION & INITIAL STATE ---
 st.set_page_config(layout="wide", page_title="AI Microscope Dashboard")
@@ -134,6 +129,8 @@ if "telemetry_log" not in st.session_state:
     st.session_state.telemetry_log = [] 
 if "last_action_time" not in st.session_state:
     st.session_state.last_action_time = time.time()
+if "active_audio" not in st.session_state:
+    st.session_state.active_audio = None
 
 # --- 4. THE DUAL-IMAGE BOTANICAL ENGINE ---
 def load_microscope_assets():
@@ -240,9 +237,8 @@ else:
                 st.session_state.telemetry_log.append({"action": "Navigate Map", "layer": nav_layer, "timestamp": time.time()})
                 st.session_state.last_action_time = time.time()
                 
-                # Fetch dynamically varied prompt -> Synthesize audio via ElevenLabs
-                ai_speech = generate_ai_commentary(action_type="Navigation", tissue_layer=nav_layer)
-                trigger_dynamic_audio_feedback(ai_speech)
+                # 🧠 Ask Gemini, then drop into single-use playback queue
+                st.session_state.active_audio = generate_ai_commentary(action_type="Navigation", tissue_layer=nav_layer)
                 
                 st.date_index = time.time()
                 st.rerun()
@@ -260,9 +256,8 @@ else:
             st.session_state.telemetry_log.append({"action": "Submit Target", "layer": detected_layer, "timestamp": time.time()})
             st.session_state.last_action_time = time.time()
             
-            # Fetch dynamically varied prompt -> Synthesize audio via ElevenLabs
-            ai_speech = generate_ai_commentary(action_type="Final Answer Submission", tissue_layer=detected_layer)
-            trigger_dynamic_audio_feedback(ai_speech)
+            # 🧠 Ask Gemini, then drop into single-use playback queue
+            st.session_state.active_audio = generate_ai_commentary(action_type="Final Answer Submission", tissue_layer=detected_layer)
             
             if detected_layer == "spongy mesophyll":
                 st.session_state.target_found = True
@@ -303,3 +298,6 @@ else:
     if st.session_state.pivot_triggered and not st.session_state.target_found:
         with col_pivot:
             st.error("🤖 AI Microscope Co-Pilot Intervening")
+
+    # 🛑 THE CIRCUIT BREAKER: Execute audio playback one time, then immediately zero it out
+    play_queued_audio()
