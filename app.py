@@ -295,7 +295,6 @@ else:
 
     col_view, col_ctrl, _ = st.columns([5.5, 3.5, 0.1])
 
-    # 🌟 SAFE DEFAULT DECLARATION FOR OPACITY TO PREVENT RENDER CRASHES
     overlay_opacity = 0
 
     with col_ctrl:
@@ -319,7 +318,6 @@ else:
         crop_size = int(min(h, w) / zoom)
         half_crop = int(crop_size / 2)
         
-        # Ensure stage bounds are safe
         st.session_state.y_stage = max(half_crop, min(st.session_state.y_stage, h - half_crop))
         st.session_state.x_stage = max(half_crop, min(st.session_state.x_stage, w - half_crop))
         
@@ -372,6 +370,7 @@ else:
     with col_view:
         st.write("### 🔬 Microscope Viewport (Click anywhere to center)")
         
+        # Single source of truth calculation for boundaries
         y1, y2 = st.session_state.y_stage - half_crop, st.session_state.y_stage + half_crop
         x1, x2 = st.session_state.x_stage - half_crop, st.session_state.x_stage + half_crop
         
@@ -384,8 +383,10 @@ else:
             processed_img = cv2.addWeighted(processed_img, alpha, cropped_mask[:, :, :3], beta, 0)
         
         vh, vw, _ = processed_img.shape
+        # Prominent size-50 crosshair drawn cleanly at the exact center
         cv2.drawMarker(processed_img, (int(vw / 2), int(vh / 2)), (240, 50, 50), markerType=cv2.MARKER_CROSS, markerSize=50, thickness=3)
         
+        # Unified interactive viewport container element
         viewport_click = streamlit_image_coordinates(processed_img, key="viewport_micro_click")
         if viewport_click:
             clicked_local_x = viewport_click["x"]
@@ -402,7 +403,5 @@ else:
                 st.session_state.telemetry_log.append({"action": "Viewport Micro-Click", "layer": nav_layer, "timestamp": time.time()})
                 st.session_state.active_audio = generate_ai_commentary("Viewport Navigation", nav_layer, selected_target_key)
                 st.rerun()
-
-        st.image(processed_img, use_container_width=True)
 
     play_queued_audio()
