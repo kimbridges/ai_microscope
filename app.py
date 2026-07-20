@@ -18,8 +18,6 @@ def generate_ai_commentary(action_type, tissue_layer):
         return f"Telemetry notice: {action_type} inside the {tissue_layer}."
         
     api_key = st.secrets["GEMINI_API_KEY"]
-    
-    # Using the highly compatible v1beta endpoint for direct REST requests
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     
     # Pull recent moves to give Gemini conversational awareness
@@ -44,6 +42,8 @@ def generate_ai_commentary(action_type, tissue_layer):
     """
     
     headers = {"Content-Type": "application/json"}
+    
+    # 🌟 DEFINED PLAINLY AND EXPLICITLY HERE OUTSIDE THE TRY SCOPE 🌟
     payload = {
         "contents": [
             {
@@ -97,17 +97,19 @@ def trigger_dynamic_audio_feedback(text_script):
     }
     
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=8)
+        response = requests.post(url, json=data, headers=headers, timeout=10)
         if response.status_code == 200:
-            result = response.json()
-            ai_text = result['candidates'][0]['content']['parts'][0]['text'].strip()
-            return ai_text.replace('"', '').replace('"', '')
+            audio_base64 = base64.b64encode(response.content).decode("utf-8")
+            audio_html = f"""
+                <audio autoplay style="display:none;">
+                    <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+                </audio>
+            """
+            st.components.v1.html(audio_html, height=0, width=0)
         else:
-            # 🛑 EXPOSE API ERROR CODE DIRECTLY ON THE SCREEN
-            st.error(f"Gemini API Denied Request. Status: {response.status_code} - {response.text}")
+            st.error(f"ElevenLabs Error: {response.status_code}")
     except Exception as e:
-        # 🛑 EXPOSE NETWORK TIMEOUTS OR CONNECTION ISSUES
-        st.error(f"Gemini Connection Failed: {str(e)}")
+        st.error(f"TTS pipeline failed: {str(e)}")
 
 # --- 3. PAGE CONFIGURATION & INITIAL STATE ---
 st.set_page_config(layout="wide", page_title="AI Microscope Dashboard")
@@ -243,6 +245,7 @@ else:
                 trigger_dynamic_audio_feedback(ai_speech)
                 
                 st.date_index = time.time()
+                st.rerun()
 
         st.caption(f"📍 Target Anchor Coordinate: ({st.session_state.x_stage}, {st.session_state.y_stage})")
 
@@ -257,7 +260,7 @@ else:
             st.session_state.telemetry_log.append({"action": "Submit Target", "layer": detected_layer, "timestamp": time.time()})
             st.session_state.last_action_time = time.time()
             
-            # Fetch dynamically varied prompt -> Synthesize audio via ElevenLabs[cite: 1]
+            # Fetch dynamically varied prompt -> Synthesize audio via ElevenLabs
             ai_speech = generate_ai_commentary(action_type="Final Answer Submission", tissue_layer=detected_layer)
             trigger_dynamic_audio_feedback(ai_speech)
             
