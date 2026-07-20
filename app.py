@@ -232,7 +232,7 @@ if "telemetry_log" not in st.session_state:
 if "active_audio" not in st.session_state:
     st.session_state.active_audio = None
 
-# --- 4. THE DUAL-IMAGE BOTANICAL ENGINE ---
+# --- 4. DUAL-IMAGE BOTANICAL ENGINE & ZOOM NORMALIZATION ---
 def load_microscope_assets():
     repo_files = os.listdir(".")
     leaf_file = next((f for f in ["leaf_section.jpg", "leaf_section.jpeg", "leaf_section.JPG", "leaf_section.PNG"] if f in repo_files), None)
@@ -281,7 +281,7 @@ def apply_lens(img, lens_type):
         return cv2.cvtColor(inverted, cv2.COLOR_GRAY2RGB)
     return img
 
-# --- 5. VISUAL INTERFACE LAYOUT ---
+# --- 5. VISUAL INTERFACE LAYOUT & UNIFIED VIEWPORT ENGINE ---
 st.title("🔬 AI Microscope Learning Environment")
 st.caption(status_msg)
 st.markdown("---")
@@ -294,7 +294,6 @@ else:
         st.session_state.x_stage, st.session_state.y_stage = int(w / 2), int(h / 2)
 
     col_view, col_ctrl, _ = st.columns([5.5, 3.5, 0.1])
-
     overlay_opacity = 0
 
     with col_ctrl:
@@ -314,8 +313,10 @@ else:
             index=1
         )
         
+        # 🌟 ASPECT RATIO LOCK: Base crop sizing strictly on a square dimension factor
         zoom = {"4x (Scanning Objective)": 1.0, "10x (Low Power Objective)": 2.2, "40x (High Power Objective)": 5.0}[objective_lens]
-        crop_size = int(min(h, w) / zoom)
+        base_box_dim = int(min(h, w) / 2.0) # Ensures a uniform base geometry
+        crop_size = int(base_box_dim / zoom)
         half_crop = int(crop_size / 2)
         
         st.session_state.y_stage = max(half_crop, min(st.session_state.y_stage, h - half_crop))
@@ -370,12 +371,21 @@ else:
     with col_view:
         st.write("### 🔬 Microscope Viewport (Click anywhere to center)")
         
-        # Single source of truth calculation for boundaries
-        y1, y2 = st.session_state.y_stage - half_crop, st.session_state.y_stage + half_crop
-        x1, x2 = st.session_state.x_stage - half_crop, st.session_state.x_stage + half_crop
+        # 🌟 STRICT SQUARE BOUNDARY EXTRACTION
+        y1 = max(0, st.session_state.y_stage - half_crop)
+        y2 = min(h, st.session_state.y_stage + half_crop)
+        x1 = max(0, st.session_state.x_stage - half_crop)
+        x2 = min(w, st.session_state.x_stage + half_crop)
         
         cropped_img = leaf_img[y1:y2, x1:x2]
         cropped_mask = mask_img[y1:y2, x1:x2]
+        
+        # Force exact square sizing via interpolation if boundaries clip at edges
+        if cropped_img.shape[0] != cropped_img.shape[1]:
+            target_dim = min(cropped_img.shape[0], cropped_img.shape[1])
+            cropped_img = cv2.resize(cropped_img, (target_dim, target_dim))
+            cropped_mask = cv2.resize(cropped_mask, (target_dim, target_dim), interpolation=cv2.INTER_NEAREST)
+
         processed_img = apply_lens(cropped_img, st.session_state.active_lens).copy()
         
         if overlay_opacity > 0:
@@ -383,17 +393,19 @@ else:
             processed_img = cv2.addWeighted(processed_img, alpha, cropped_mask[:, :, :3], beta, 0)
         
         vh, vw, _ = processed_img.shape
-        # Prominent size-50 crosshair drawn cleanly at the exact center
+        # Prominent size-50 crosshair locked strictly to the calculated center
         cv2.drawMarker(processed_img, (int(vw / 2), int(vh / 2)), (240, 50, 50), markerType=cv2.MARKER_CROSS, markerSize=50, thickness=3)
         
-        # Unified interactive viewport container element
-        viewport_click = streamlit_image_coordinates(processed_img, key="viewport_micro_click")
+        # Unified interactive viewport container element with explicit sizing key
+        viewport_click = streamlit_image_coordinates(processed_img, key=f"viewport_click_{objective_lens}")
         if viewport_click:
             clicked_local_x = viewport_click["x"]
             clicked_local_y = viewport_click["y"]
             
-            new_global_x = x1 + int(clicked_local_x)
-            new_global_y = y1 + int(clicked_local_y)
+            # Scale coordinates accurately back to global image space
+            scale_factor = (x2 - x1) / vw if vw > 0 else 1.0
+            new_global_x = int(x1 + (clicked_local_x * scale_factor))
+            new_global_y = int(y1 + (clicked_local_y * scale_factor))
             
             if new_global_x != st.session_state.x_stage or new_global_y != st.session_state.y_stage:
                 st.session_state.x_stage = max(half_crop, min(new_global_x, w - half_crop))
