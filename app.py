@@ -18,7 +18,9 @@ def generate_ai_commentary(action_type, tissue_layer):
         return f"Telemetry notice: {action_type} inside the {tissue_layer}."
         
     api_key = st.secrets["GEMINI_API_KEY"]
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
+    
+    # Using the highly compatible v1beta endpoint for direct REST requests
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     
     # Pull recent moves to give Gemini conversational awareness
     history_context = ""
