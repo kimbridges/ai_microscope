@@ -1,0 +1,7 @@
+# Netlify configuration for the AI Microscope
+# Static site (index.html + assets) served from the repo root,
+# with two serverless functions that hold the API keys server-side.
+
+[build]
+  publish = "."
+  functions = "netlify/functions"
