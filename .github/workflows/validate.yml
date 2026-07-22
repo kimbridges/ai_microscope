@@ -1,0 +1,21 @@
+name: Validate slides and lore
+
+# Runs on every push and pull request so a bad edit to a slide manifest or to
+# botanical_lore.json is caught before the site deploys.
+on:
+  push:
+    paths:
+      - "botanical_lore.json"
+      - "slide_*.json"
+      - "scripts/validate_lore.mjs"
+      - ".github/workflows/validate.yml"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate lore against the app
+        run: node scripts/validate_lore.mjs

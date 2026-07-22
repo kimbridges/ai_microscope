@@ -1,86 +1,86 @@
-// Validates botanical_lore.json against the app (index.html).
+// Validates the slide manifests and the shared botanical lore.
 // Run locally with:  node scripts/validate_lore.mjs
-// Also runs automatically in CI on every push (see .github/workflows/validate.yml).
+// Also runs in CI on every push (see .github/workflows/validate.yml).
 //
 // FAILS the build (exit 1) when:
-//   1. botanical_lore.json is not valid JSON.
-//   2. Any lore entry is missing a required field or has an empty one.
-//   3. Any learning target in the app's dropdown has no lore entry.
+//   1. A slide manifest is not valid JSON, or is missing required fields.
+//   2. A tissue's color is not [r,g,b] with 0-255 integers, or pct is not a number.
+//   3. Two tissues in a slide share the same color (identification would be ambiguous).
+//   4. A referenced lore entry exists but is missing a required field / has an empty one.
 // WARNS (does not fail) when:
-//   - A color anchor has no lore entry (expected for structural tissues).
-//   - A lore entry matches no anchor and no dropdown target (possible typo).
+//   - A tissue's lore key has no entry yet in botanical_lore.json (e.g. midrib,
+//     pending a botanical write-up) — flagged so it isn't forgotten.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 
-const REQUIRED_FIELDS = ["proper_name", "analog", "intro_explanation", "beginner", "advanced"];
+const REQUIRED_LORE_FIELDS = ["proper_name", "analog", "intro_explanation", "beginner", "advanced"];
 const errors = [];
 const warnings = [];
 
-// --- Load lore ---
-let lore;
+// --- Shared lore ---
+let lore = {};
 try {
   lore = JSON.parse(readFileSync("botanical_lore.json", "utf8"));
 } catch (e) {
   console.error("FAIL: botanical_lore.json is not valid JSON —", e.message);
   process.exit(1);
 }
-const loreKeys = Object.keys(lore);
 
-// --- Field completeness ---
-for (const [key, entry] of Object.entries(lore)) {
-  if (typeof entry !== "object" || entry === null) {
-    errors.push(`Lore entry "${key}" is not an object.`);
+// --- Discover slide manifests (slide_*.json at repo root) ---
+const slideFiles = readdirSync(".").filter(f => /^slide_.*\.json$/.test(f));
+if (slideFiles.length === 0) errors.push("No slide manifest found (expected slide_*.json).");
+
+const isRGB = (c) => Array.isArray(c) && c.length === 3 &&
+  c.every(v => Number.isInteger(v) && v >= 0 && v <= 255);
+const key = (c) => c.join(",");
+
+for (const f of slideFiles) {
+  let slide;
+  try {
+    slide = JSON.parse(readFileSync(f, "utf8"));
+  } catch (e) {
+    errors.push(`${f}: not valid JSON — ${e.message}`);
     continue;
   }
-  for (const f of REQUIRED_FIELDS) {
-    const v = entry[f];
-    if (v === undefined || v === null || String(v).trim() === "") {
-      errors.push(`Lore entry "${key}" is missing or has an empty "${f}".`);
+  for (const field of ["id", "image", "mask", "tissues"]) {
+    if (!(field in slide)) errors.push(`${f}: missing "${field}".`);
+  }
+  if (slide.mask && !existsSync(slide.mask)) errors.push(`${f}: mask file "${slide.mask}" not found.`);
+  if (slide.image && !existsSync(slide.image)) errors.push(`${f}: image file "${slide.image}" not found.`);
+  if (!Array.isArray(slide.tissues)) continue;
+
+  const seen = new Map();
+  for (const t of slide.tissues) {
+    const label = `${f} · tissue "${t.key || "?"}"`;
+    if (!t.key) errors.push(`${label}: missing "key".`);
+    if (!isRGB(t.color)) errors.push(`${label}: "color" must be [r,g,b] integers 0-255.`);
+    if (typeof t.pct !== "number") errors.push(`${label}: "pct" must be a number.`);
+    if (isRGB(t.color)) {
+      if (seen.has(key(t.color)))
+        errors.push(`${label}: color ${key(t.color)} duplicates "${seen.get(key(t.color))}" — ambiguous identification.`);
+      seen.set(key(t.color), t.key);
+    }
+    if (t.lore) {
+      const entry = lore[t.lore];
+      if (!entry) {
+        warnings.push(`${label}: lore key "${t.lore}" has no entry in botanical_lore.json yet.`);
+      } else {
+        for (const fld of REQUIRED_LORE_FIELDS) {
+          if (entry[fld] === undefined || String(entry[fld]).trim() === "")
+            errors.push(`${label}: lore "${t.lore}" is missing/empty "${fld}".`);
+        }
+      }
+    } else {
+      warnings.push(`${label}: no "lore" key set.`);
     }
   }
 }
 
-// --- Pull the app's tissue vocabulary out of index.html ---
-const html = readFileSync("index.html", "utf8");
-
-// dropdown learning targets: the <select id="objective-select"> option values
-const objBlock = (html.match(/id="objective-select"[\s\S]*?<\/select>/) || [""])[0];
-const targets = [...objBlock.matchAll(/value="([^"]+)"/g)].map(m => m[1]);
-
-// color anchors: keys of the const colorAnchors = { ... } object
-const anchorBlock = (html.match(/const colorAnchors\s*=\s*\{[\s\S]*?\};/) || [""])[0];
-const anchors = [...anchorBlock.matchAll(/"([^"]+)"\s*:\s*\[/g)].map(m => m[1]);
-
-if (targets.length === 0) errors.push("Could not find any objective-select targets in index.html.");
-if (anchors.length === 0) errors.push("Could not find colorAnchors in index.html.");
-
-// --- Every learning target MUST have lore (breaks the briefing otherwise) ---
-for (const t of targets) {
-  if (!loreKeys.includes(t)) {
-    errors.push(`Dropdown target "${t}" has no entry in botanical_lore.json.`);
-  }
-}
-
-// --- Anchors without lore: expected for structural tissues, informational only ---
-for (const a of anchors) {
-  if (!loreKeys.includes(a)) {
-    warnings.push(`Color anchor "${a}" has no lore entry (structural/background — Rachel will use the generic fallback).`);
-  }
-}
-
-// --- Lore entries reachable by nothing: likely a typo in the key ---
-const vocab = new Set([...targets, ...anchors]);
-for (const k of loreKeys) {
-  if (!vocab.has(k)) {
-    warnings.push(`Lore entry "${k}" matches no dropdown target and no color anchor — check for a typo in the key.`);
-  }
-}
-
 // --- Report ---
-console.log(`Checked ${loreKeys.length} lore entries, ${targets.length} dropdown targets, ${anchors.length} color anchors.`);
+console.log(`Checked ${slideFiles.length} slide manifest(s) against botanical_lore.json.`);
 for (const w of warnings) console.log("WARN:", w);
 if (errors.length) {
   for (const e of errors) console.error("FAIL:", e);
   process.exit(1);
 }
-console.log("OK: botanical_lore.json is valid and covers every learning target.");
+console.log("OK: slide manifests are valid and consistent with the lore.");

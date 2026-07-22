@@ -147,15 +147,7 @@
         <div class="control-panel">
             <div class="control-group">
                 <label for="objective-select">🎯 Tissue Types (Investigation Objective):</label>
-                <select id="objective-select">
-                    <option value="upper epidermis">Upper Epidermis (Greenhouse Glass)</option>
-                    <option value="cuticle">Cuticle (Waterproof Sealant)</option>
-                    <option value="palisade mesophyll" selected>Palisade Mesophyll (Solar Panel Array)</option>
-                    <option value="spongy mesophyll">Spongy Mesophyll (Ventilation Network)</option>
-                    <option value="xylem">Xylem (High-Pressure Plumbing Main)</option>
-                    <option value="phloem">Phloem (Sugar Transit Conveyor)</option>
-                    <option value="lower epidermis">Lower Epidermis (Secure Utility Vault)</option>
-                </select>
+                <select id="objective-select"><!-- populated from the slide manifest --></select>
             </div>
 
             <div class="turret-row">
@@ -219,25 +211,19 @@
             let maskCanvas = document.createElement("canvas");
             let maskCtx = maskCanvas.getContext("2d", { willReadFrequently: true });
 
-            const masterWidth = 6528;
-            const masterHeight = 3680;
-            let stageX = masterWidth / 2;
-            let stageY = masterHeight / 2;
+            // Dimensions come from the loaded image; identification comes from the
+            // slide manifest. Nothing about tissues or colours is hardcoded here.
+            let masterWidth = 0;
+            let masterHeight = 0;
+            let stageX = 0;
+            let stageY = 0;
 
-            const colorAnchors = {
-                "upper epidermis": [247, 197, 40],
-                "palisade mesophyll": [32, 146, 20],
-                "spongy mesophyll": [177, 226, 117],
-                "midrib ground-tissue parenchyma": [211, 241, 197],
-                "bundle sheath and vascular-associated tissue": [232, 141, 17],
-                "xylem": [234, 36, 35],
-                "phloem": [16, 98, 227],
-                "sclerenchyma/collenchyma support tissue": [144, 95, 175],
-                "lower epidermis": [150, 100, 40],
-                "cuticle": [160, 158, 161],
-                "intercellular space / background": [254, 254, 254],
-                "cell wall boundary line": [0, 0, 0]
-            };
+            let slide = null;          // the loaded slide manifest
+            let palette = [];          // [{key, color:[r,g,b], kind:'tissue'|'background'|'unclassified'}]
+            let tissueMeta = {};       // key -> {name, analog, pct, hasLore}
+            const MATCH_TOL = 25;      // exact-ish tolerance for the categorical mask
+
+            const titleCase = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
 
             // Handle Splash Screen Dismissal & Initial Audio Unlock Context
             launchBtn.addEventListener("click", () => {
@@ -280,34 +266,72 @@
                 }
             }
 
-            statusBadge.textContent = "Loading botanical_lore.json...";
+            statusBadge.textContent = "Loading slide…";
 
             try {
+                // 1. Slide manifest — palette + per-tissue abundances live here, per slide.
+                const slideResp = await fetch("slide_syringa.json");
+                if (!slideResp.ok) throw new Error("Could not find slide_syringa.json");
+                slide = await slideResp.json();
+
+                // 2. Shared botanical lore (keyed by tissue; reused across slides).
                 const loreResponse = await fetch("botanical_lore.json");
                 if (!loreResponse.ok) throw new Error("Could not find botanical_lore.json");
                 botanicalLore = await loreResponse.json();
 
-                statusBadge.textContent = "Loading leaf_section.jpg...";
+                // 3. Build palette + per-tissue metadata + the dropdown from the manifest.
+                palette = [];
+                tissueMeta = {};
+                for (const t of slide.tissues) {
+                    palette.push({ key: t.key, color: t.color, kind: "tissue" });
+                    const lore = botanicalLore[t.lore] || null;
+                    tissueMeta[t.key] = {
+                        name: (lore && lore.proper_name) || titleCase(t.key),
+                        analog: (lore && lore.analog) || "",
+                        pct: t.pct,
+                        hasLore: !!lore
+                    };
+                }
+                for (const bg of (slide.background || []))
+                    palette.push({ key: "intercellular space / background", color: bg, kind: "background" });
+                if (slide.unclassified_color)
+                    palette.push({ key: "unclassified region", color: slide.unclassified_color, kind: "unclassified" });
+
+                objectiveSelect.innerHTML = "";
+                slide.tissues.forEach((t, i) => {
+                    const opt = document.createElement("option");
+                    opt.value = t.key;
+                    opt.textContent = `${tissueMeta[t.key].name} — ${t.pct}% of view`;
+                    if (i === 0) opt.selected = true;
+                    objectiveSelect.appendChild(opt);
+                });
+
+                // 4. Leaf image — its own pixel dimensions define the stage (not hardcoded).
+                statusBadge.textContent = `Loading ${slide.image}…`;
                 leafImage = new Image();
-                leafImage.src = "leaf_section.jpg";
+                leafImage.src = slide.image;
                 await new Promise((resolve, reject) => {
                     leafImage.onload = resolve;
-                    leafImage.onerror = () => reject(new Error("Failed to load leaf_section.jpg"));
+                    leafImage.onerror = () => reject(new Error("Failed to load " + slide.image));
                 });
+                masterWidth = leafImage.naturalWidth;
+                masterHeight = leafImage.naturalHeight;
+                stageX = Math.floor(masterWidth / 2);
+                stageY = Math.floor(masterHeight / 2);
 
-                statusBadge.textContent = "Loading color_layer.png...";
+                // 5. Categorical colour mask.
+                statusBadge.textContent = `Loading ${slide.mask}…`;
                 maskImage = new Image();
-                maskImage.src = "color_layer.png";
+                maskImage.src = slide.mask;
                 await new Promise((resolve, reject) => {
                     maskImage.onload = resolve;
-                    maskImage.onerror = () => reject(new Error("Failed to load color_layer.png"));
+                    maskImage.onerror = () => reject(new Error("Failed to load " + slide.mask));
                 });
-
                 maskCanvas.width = maskImage.width;
                 maskCanvas.height = maskImage.height;
                 maskCtx.drawImage(maskImage, 0, 0);
 
-                statusBadge.textContent = `🎯 System Live: ${masterWidth}x${masterHeight} pixels loaded.`;
+                statusBadge.textContent = `🎯 ${slide.species}: ${slide.tissues.length} tissues · ${masterWidth}×${masterHeight}`;
                 redrawViewport();
             } catch (error) {
                 statusBadge.textContent = `❌ Error: ${error.message}`;
@@ -362,54 +386,77 @@
                 });
             }
 
-            function sampleCurrentTissue() {
-                const maskX = Math.floor((stageX / masterWidth) * maskImage.width);
-                const maskY = Math.floor((stageY / masterHeight) * maskImage.height);
-                const pixel = maskCtx.getImageData(maskX, maskY, 1, 1).data;
-                const rgb = [pixel[0], pixel[1], pixel[2]];
+            // Exact-match identification against the manifest palette. On a categorical
+            // mask every pixel is exactly one palette colour, so the nearest match is
+            // exact; anything beyond MATCH_TOL is reported as unclassified, never forced.
+            function classifyAt(sx, sy) {
+                const maskX = Math.floor((sx / masterWidth) * maskImage.width);
+                const maskY = Math.floor((sy / masterHeight) * maskImage.height);
+                const p = maskCtx.getImageData(maskX, maskY, 1, 1).data;
 
-                let closestLayer = "intercellular space / background";
-                let minDistance = Infinity;
-
-                for (const [layerName, anchor] of Object.entries(colorAnchors)) {
-                    const dist = Math.sqrt(
-                        Math.pow(rgb[0] - anchor[0], 2) +
-                        Math.pow(rgb[1] - anchor[1], 2) +
-                        Math.pow(rgb[2] - anchor[2], 2)
+                let best = null, bestD = Infinity;
+                for (const e of palette) {
+                    const d = Math.sqrt(
+                        (p[0] - e.color[0]) ** 2 +
+                        (p[1] - e.color[1]) ** 2 +
+                        (p[2] - e.color[2]) ** 2
                     );
-                    if (dist < minDistance) {
-                        minDistance = dist;
-                        closestLayer = layerName;
-                    }
+                    if (d < bestD) { bestD = d; best = e; }
                 }
-                return closestLayer;
+                if (!best || bestD > MATCH_TOL) return { key: "unclassified region", kind: "unclassified" };
+                return { key: best.key, kind: best.kind };
             }
 
+            function sampleCurrentTissue() { return classifyAt(stageX, stageY).key; }
+
             async function triggerAudioFeedback(actionType) {
+                if (!maskImage || !leafImage || !palette.length) return; // not loaded yet
+
                 const detectedLayer = sampleCurrentTissue();
                 const targetKey = objectiveSelect.value;
                 const depthMode = depthSelect ? depthSelect.value : "beginner";
 
-                const currentLore = botanicalLore[detectedLayer] || { proper_name: detectedLayer, analog: "structure", intro_explanation: "", beginner: "", advanced: "" };
-                const goalLore = botanicalLore[targetKey] || { proper_name: targetKey, analog: "target", intro_explanation: "" };
+                const meta = tissueMeta[detectedLayer];      // undefined for background / unclassified
+                const goalMeta = tissueMeta[targetKey] || { name: titleCase(targetKey), analog: "", pct: null, hasLore: false };
+                const currentLore = botanicalLore[detectedLayer] || {};
+                const goalLore = botanicalLore[targetKey] || {};
+                const currentName = meta ? meta.name
+                    : (detectedLayer === "unclassified region" ? "an unlabeled area" : "intercellular space");
 
                 audioStatus.textContent = "🧠 Rachel is preparing explanation...";
 
+                const abundanceHint = (pct) => {
+                    if (pct == null) return "";
+                    if (pct >= 10) return ` It fills about ${pct}% of the view, so it's easy to find.`;
+                    if (pct >= 5)  return ` It's about ${pct}% of the view — fairly common.`;
+                    return ` It's only about ${pct}% of the view, so it's sparse — look carefully.`;
+                };
+
                 let feedbackText = "";
                 if (actionType === "Objective Briefing") {
-                    feedbackText = goalLore.intro_explanation || `Now targeting the ${goalLore.proper_name}.`;
+                    const base = goalLore.intro_explanation || `Let's look for the ${goalMeta.name}.`;
+                    feedbackText = base + abundanceHint(goalMeta.pct);
                 } else if (actionType === "Final Answer Submission") {
                     if (detectedLayer === targetKey) {
-                        feedbackText = `Correct! You have successfully located the ${goalLore.proper_name}, which functions like a ${goalLore.analog}. Excellent structural identification.`;
+                        const like = goalMeta.analog ? `, which functions like a ${goalMeta.analog}` : "";
+                        feedbackText = `Correct — you've located the ${goalMeta.name}${like}. Nice structural identification.`;
                         audioStatus.style.color = "#4ade80";
                     } else {
-                        feedbackText = `Not quite. Your crosshair is currently resting on the ${currentLore.proper_name}. Keep searching for the ${goalLore.proper_name}.`;
+                        feedbackText = `Not quite — your crosshair is resting on ${currentName}. Keep searching for the ${goalMeta.name}.`;
                         audioStatus.style.color = "#f87171";
                     }
                 } else {
-                    const narrativeDetail = depthMode === "advanced" ? currentLore.advanced : currentLore.beginner;
-                    feedbackText = `Inspecting the ${currentLore.proper_name}, which functions like a ${currentLore.analog}. ${narrativeDetail}`;
-                    audioStatus.style.color = "#38bdf8";
+                    if (!meta) {
+                        feedbackText = detectedLayer === "unclassified region"
+                            ? "This area isn't part of a labeled tissue yet — try moving toward a colored region."
+                            : "This is intercellular space, between the labeled tissues. Keep exploring.";
+                        audioStatus.style.color = "#94a3b8";
+                    } else {
+                        const detail = (depthMode === "advanced" ? currentLore.advanced : currentLore.beginner) || "";
+                        const like = meta.analog ? `, which functions like a ${meta.analog}` : "";
+                        feedbackText = `Inspecting the ${meta.name}${like}.` + (detail ? ` ${detail}` : abundanceHint(meta.pct));
+                        audioStatus.style.color = "#38bdf8";
+                    }
                 }
 
                 // Tone polish via the Gemini proxy function (key stays server-side).
@@ -417,10 +464,10 @@
                     try {
                         const prompt = `You are Rachel, an expert, warm botanical mentor guiding a student through a high-resolution microscope simulation of a leaf section.
                         The user performed action: "${actionType}".
-                        Target objective: "${goalLore.proper_name}".
-                        Current location under crosshair: "${currentLore.proper_name}" (Analog: "${currentLore.analog}").
+                        Target objective: "${goalMeta.name}".
+                        Current location under crosshair: "${currentName}"${meta && meta.analog ? ` (Analog: "${meta.analog}")` : ""}.
                         Base script to adapt: "${feedbackText}".
-                        Keep the proper nomenclature ("${currentLore.proper_name}") prominent, ensure the structural analogy ("${currentLore.analog}") is clear, maintain a warm mentoring tone, and keep the text under 45 words.`;
+                        Keep the proper tissue name ("${currentName}") prominent, keep any structural analogy clear, do not invent facts beyond the base script, maintain a warm mentoring tone, and keep the text under 45 words.`;
 
                         const geminiResponse = await fetch("/.netlify/functions/narrate", {
                             method: "POST",
