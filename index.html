@@ -176,6 +176,11 @@
                 </select>
             </div>
 
+            <div class="control-group">
+                <label for="overlay-slider">🫥 Tissue-map overlay: <span id="overlay-val">micrograph</span></label>
+                <input type="range" id="overlay-slider" min="0" max="100" value="0" step="1">
+            </div>
+
             <button class="btn-primary" id="submit-target-btn">🎯 Submit Center Crosshair Target</button>
         </div>
 
@@ -200,6 +205,8 @@
             const turretSelect = document.getElementById("turret-select");
             const viewModeSelect = document.getElementById("viewmode-select");
             const depthSelect = document.getElementById("depth-select");
+            const overlaySlider = document.getElementById("overlay-slider");
+            const overlayVal = document.getElementById("overlay-val");
             const submitBtn = document.getElementById("submit-target-btn");
             const canvas = document.getElementById("viewport-canvas");
             const ctx = canvas.getContext("2d");
@@ -263,6 +270,21 @@
                     ctx.filter = "grayscale(100%) contrast(200%)";
                     ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
                     ctx.filter = "none";
+                }
+
+                // Tissue-map overlay: fade the categorical mask over the micrograph
+                // (same stage crop, scaled to the mask's own resolution) to check
+                // both alignment and colour placement.
+                const ov = overlaySlider ? Number(overlaySlider.value) : 0;
+                if (ov > 0 && maskImage) {
+                    const mw = maskImage.width, mh = maskImage.height;
+                    const mx1 = (x1 / masterWidth) * mw, my1 = (y1 / masterHeight) * mh;
+                    const mcw = ((x2 - x1) / masterWidth) * mw, mch = ((y2 - y1) / masterHeight) * mh;
+                    ctx.globalAlpha = ov / 100;
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(maskImage, mx1, my1, mcw, mch, 0, 0, canvas.width, canvas.height);
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.globalAlpha = 1;
                 }
             }
 
@@ -340,6 +362,11 @@
 
             if (turretSelect) turretSelect.addEventListener("change", redrawViewport);
             if (viewModeSelect) viewModeSelect.addEventListener("change", redrawViewport);
+            if (overlaySlider) overlaySlider.addEventListener("input", () => {
+                const v = Number(overlaySlider.value);
+                overlayVal.textContent = v === 0 ? "micrograph" : (v === 100 ? "tissue map" : v + "% map");
+                redrawViewport();
+            });
 
             if (objectiveSelect) {
                 objectiveSelect.addEventListener("change", () => {
