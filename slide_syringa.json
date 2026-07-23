@@ -4,12 +4,94 @@
   "image": "leaf_section.jpg",
   "mask": "color_layer_clean.png",
   "match": "exact",
-  "background": [[254, 254, 254], [0, 0, 0]],
-  "unclassified_color": [170, 170, 170],
+  "pct_basis": "leaf footprint (exterior fill excluded)",
+  "background": [
+    [
+      254,
+      254,
+      254
+    ],
+    [
+      0,
+      0,
+      0
+    ]
+  ],
+  "unclassified_color": [
+    170,
+    170,
+    170
+  ],
   "tissues": [
-    { "key": "palisade mesophyll",             "color": [32, 146, 20],  "pct": 4.6,  "lore": "palisade mesophyll" },
-    { "key": "spongy mesophyll",               "color": [177, 226, 117],"pct": 6.8,  "lore": "spongy mesophyll" },
-    { "key": "midrib ground-tissue parenchyma","color": [211, 241, 197],"pct": 14.1, "lore": "midrib ground-tissue parenchyma" },
-    { "key": "xylem",                          "color": [234, 36, 35],  "pct": 2.6,  "lore": "xylem" }
+    {
+      "key": "upper epidermis",
+      "color": [
+        247,
+        197,
+        40
+      ],
+      "pct": 4.4,
+      "lore": "upper epidermis"
+    },
+    {
+      "key": "palisade mesophyll",
+      "color": [
+        32,
+        146,
+        20
+      ],
+      "pct": 8.1,
+      "lore": "palisade mesophyll"
+    },
+    {
+      "key": "spongy mesophyll",
+      "color": [
+        177,
+        226,
+        117
+      ],
+      "pct": 11.8,
+      "lore": "spongy mesophyll"
+    },
+    {
+      "key": "midrib ground-tissue parenchyma",
+      "color": [
+        211,
+        241,
+        197
+      ],
+      "pct": 24.4,
+      "lore": "midrib ground-tissue parenchyma"
+    },
+    {
+      "key": "bundle sheath and vascular-associated tissue",
+      "color": [
+        232,
+        141,
+        17
+      ],
+      "pct": 2.9,
+      "lore": "bundle sheath and vascular-associated tissue"
+    },
+    {
+      "key": "phloem",
+      "color": [
+        16,
+        98,
+        227
+      ],
+      "pct": 2.1,
+      "lore": "phloem"
+    },
+    {
+      "key": "xylem",
+      "color": [
+        234,
+        36,
+        35
+      ],
+      "pct": 4.5,
+      "lore": "xylem"
+    }
   ]
 }
