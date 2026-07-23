@@ -47,5 +47,19 @@
         "intro_explanation": "Lower epidermal tissue contains specialized guard cells, which functions like a secure utility vault equipped with gateway valves to regulate humidity and gas exchange.",
         "beginner": "The baseline defense featuring microscopic gateway valves regulating air exchange.",
         "advanced": "A cellular boundary housing stomatal complexes that mediate gas exchange and govern intrinsic water-use efficiency."
+    },
+    "midrib ground-tissue parenchyma": {
+        "proper_name": "midrib ground parenchyma",
+        "analog": "packing and bracing around the vein",
+        "intro_explanation": "The midrib ground parenchyma is bulky, thin-walled packing tissue filling the leaf's central rib, which functions like the packing and bracing around the vein — giving the midrib its rigidity and cushioning the vascular bundle that runs through it.",
+        "beginner": "Bulky filler cells that pad and stiffen the leaf's central rib around the big vein.",
+        "advanced": "Thin-walled ground parenchyma of the midrib, often reinforced by collenchyma near the surface, that mechanically supports the central vascular bundle and provides bulk, rigidity, and storage."
+    },
+    "bundle sheath and vascular-associated tissue": {
+        "proper_name": "bundle sheath",
+        "analog": "a checkpoint wrapper around the vein",
+        "intro_explanation": "The bundle sheath is a compact layer of cells wrapping each vascular bundle, which functions like a checkpoint wrapper around the vein — controlling what passes between the plumbing of xylem and phloem and the surrounding leaf tissue.",
+        "beginner": "A snug ring of cells around the vein that controls what moves in and out.",
+        "advanced": "A concentric parenchymatous sheath enclosing the vascular bundle, regulating apoplastic and symplastic exchange between the vascular tissue and the mesophyll, sometimes extending as bundle-sheath extensions to the epidermis."
     }
 }
