@@ -24,13 +24,23 @@
   ],
   "tissues": [
     {
+      "key": "cuticle",
+      "color": [
+        232,
+        90,
+        174
+      ],
+      "pct": 1.1,
+      "lore": "cuticle"
+    },
+    {
       "key": "upper epidermis",
       "color": [
         247,
         197,
         40
       ],
-      "pct": 7.9,
+      "pct": 3.7,
       "lore": "upper epidermis"
     },
     {
@@ -50,7 +60,7 @@
         226,
         117
       ],
-      "pct": 17.7,
+      "pct": 17.9,
       "lore": "spongy mesophyll"
     },
     {
@@ -60,17 +70,17 @@
         241,
         197
       ],
-      "pct": 45.5,
+      "pct": 42.7,
       "lore": "midrib ground-tissue parenchyma"
     },
     {
       "key": "bundle sheath and vascular-associated tissue",
       "color": [
-        232,
-        141,
-        17
+        139,
+        69,
+        19
       ],
-      "pct": 5.6,
+      "pct": 7.3,
       "lore": "bundle sheath and vascular-associated tissue"
     },
     {
@@ -90,8 +100,18 @@
         36,
         35
       ],
-      "pct": 8.0,
+      "pct": 7.6,
       "lore": "xylem"
+    },
+    {
+      "key": "lower epidermis",
+      "color": [
+        14,
+        156,
+        156
+      ],
+      "pct": 4.4,
+      "lore": "lower epidermis"
     }
   ]
 }
