@@ -318,6 +318,8 @@
                     palette.push({ key: "intercellular space / background", color: bg, kind: "background" });
                 if (slide.unclassified_color)
                     palette.push({ key: "unclassified region", color: slide.unclassified_color, kind: "unclassified" });
+                if (slide.outside_color)
+                    palette.push({ key: "outside the section", color: slide.outside_color, kind: "outside" });
 
                 objectiveSelect.innerHTML = "";
                 slide.tissues.forEach((t, i) => {
@@ -448,7 +450,8 @@
                 const currentLore = botanicalLore[detectedLayer] || {};
                 const goalLore = botanicalLore[targetKey] || {};
                 const currentName = meta ? meta.name
-                    : (detectedLayer === "unclassified region" ? "an unlabeled area" : "intercellular space");
+                    : (detectedLayer === "outside the section" ? "outside the section"
+                    : (detectedLayer === "unclassified region" ? "an unlabeled area" : "intercellular space"));
 
                 audioStatus.textContent = "🧠 Rachel is preparing explanation...";
 
@@ -474,9 +477,11 @@
                     }
                 } else {
                     if (!meta) {
-                        feedbackText = detectedLayer === "unclassified region"
-                            ? "This area isn't part of a labeled tissue yet — try moving toward a colored region."
-                            : "This is intercellular space, between the labeled tissues. Keep exploring.";
+                        feedbackText = detectedLayer === "outside the section"
+                            ? "You're just outside the section — move onto the leaf to explore a tissue."
+                            : (detectedLayer === "unclassified region"
+                                ? "This area isn't part of a labeled tissue yet — try moving toward a colored region."
+                                : "This is intercellular space, between the labeled tissues. Keep exploring.");
                         audioStatus.style.color = "#94a3b8";
                     } else {
                         const detail = (depthMode === "advanced" ? currentLore.advanced : currentLore.beginner) || "";

@@ -5,6 +5,11 @@
   "mask": "color_layer_clean.png",
   "match": "exact",
   "pct_basis": "clickable footprint of the leaf (interior partitioned to nearest tissue)",
+  "outside_color": [
+    36,
+    40,
+    50
+  ],
   "background": [
     [
       254,
