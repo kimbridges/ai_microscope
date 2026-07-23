@@ -4,7 +4,7 @@
   "image": "leaf_section.jpg",
   "mask": "color_layer_clean.png",
   "match": "exact",
-  "pct_basis": "leaf footprint (exterior fill excluded)",
+  "pct_basis": "clickable footprint of the leaf (interior partitioned to nearest tissue)",
   "background": [
     [
       254,
@@ -30,7 +30,7 @@
         197,
         40
       ],
-      "pct": 4.4,
+      "pct": 7.9,
       "lore": "upper epidermis"
     },
     {
@@ -40,7 +40,7 @@
         146,
         20
       ],
-      "pct": 8.1,
+      "pct": 11.4,
       "lore": "palisade mesophyll"
     },
     {
@@ -50,7 +50,7 @@
         226,
         117
       ],
-      "pct": 11.8,
+      "pct": 17.7,
       "lore": "spongy mesophyll"
     },
     {
@@ -60,7 +60,7 @@
         241,
         197
       ],
-      "pct": 24.4,
+      "pct": 45.5,
       "lore": "midrib ground-tissue parenchyma"
     },
     {
@@ -70,7 +70,7 @@
         141,
         17
       ],
-      "pct": 2.9,
+      "pct": 5.6,
       "lore": "bundle sheath and vascular-associated tissue"
     },
     {
@@ -80,7 +80,7 @@
         98,
         227
       ],
-      "pct": 2.1,
+      "pct": 3.9,
       "lore": "phloem"
     },
     {
@@ -90,7 +90,7 @@
         36,
         35
       ],
-      "pct": 4.5,
+      "pct": 8.0,
       "lore": "xylem"
     }
   ]
