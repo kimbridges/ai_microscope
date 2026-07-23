@@ -28,15 +28,19 @@ exports.handler = async (event) => {
     return { statusCode: 500, body: "Server is missing ELEVEN_KEY" };
   }
 
-  let text, voiceId;
+  let text, voiceId, model;
   try {
-    ({ text, voiceId } = JSON.parse(event.body || "{}"));
+    ({ text, voiceId, model } = JSON.parse(event.body || "{}"));
   } catch (e) {
     return { statusCode: 400, body: "Bad JSON body" };
   }
   if (!text) {
     return { statusCode: 400, body: "Missing 'text'" };
   }
+  // Allow the caller to pick the model. Narration uses the fast flash model by
+  // default; pronunciation uses turbo v2 (the model that honours phoneme tags).
+  const ALLOWED_MODELS = ["eleven_flash_v2_5", "eleven_turbo_v2"];
+  const modelId = ALLOWED_MODELS.includes(model) ? model : "eleven_flash_v2_5";
 
   try {
     const resp = await fetch(
@@ -50,7 +54,7 @@ exports.handler = async (event) => {
         },
         body: JSON.stringify({
           text: text,
-          model_id: "eleven_flash_v2_5",
+          model_id: modelId,
           voice_settings: { stability: 0.5, similarity_boost: 0.75 }
         })
       }

@@ -4,62 +4,89 @@
         "analog": "solar panel array",
         "intro_explanation": "Palisade parenchyma consists of tightly packed, columnar cells densely filled with chloroplasts, which functions like a high-efficiency solar panel array designed to capture maximum light energy for photosynthesis.",
         "beginner": "Dense columns of upright, chloroplast-packed cells capturing light energy at peak efficiency.",
-        "advanced": "Columnar parenchyma tissue oriented perpendicular to the epidermis, optimized for light capture and directional CO2 diffusion."
+        "advanced": "Columnar parenchyma tissue oriented perpendicular to the epidermis, optimized for light capture and directional CO2 diffusion.",
+        "say": "palisade parenchyma",
+        "gloss": "the upright, sunlight-catching cells just under the top",
+        "etymology": "Palisade = a fence of stakes (Latin palus, 'stake'). Parenchyma = Greek para- 'beside' + enchyma 'something poured in' — soft cells poured in beside the rest."
     },
     "spongy mesophyll": {
         "proper_name": "spongy parenchyma",
         "analog": "ventilation network",
         "intro_explanation": "Spongy parenchyma features loosely arranged cells with large intercellular air gaps, which functions like a ventilation network that circulates carbon dioxide and oxygen throughout the inner leaf.",
         "beginner": "A loose labyrinth of air-filled chambers circulating gases smoothly throughout the interior.",
-        "advanced": "Loosely aggregated parenchyma with extensive intercellular air spaces facilitating rapid gas exchange and vapor transport."
+        "advanced": "Loosely aggregated parenchyma with extensive intercellular air spaces facilitating rapid gas exchange and vapor transport.",
+        "say": "spongy mesophyll",
+        "gloss": "the loose, airy tissue in the middle of the leaf",
+        "etymology": "Mesophyll = Greek mesos 'middle' + phyllon 'leaf' — literally the middle of the leaf."
     },
     "xylem": {
         "proper_name": "xylem tissue (vessel elements and tracheids)",
         "analog": "high-pressure plumbing main",
         "intro_explanation": "Xylem tissue consists of lignified, hollow dead cells, which functions like a high-pressure plumbing main hauling water and dissolved minerals upward from the roots.",
         "beginner": "Rigid, hollow tubes acting as a powerful water delivery pipeline from the roots.",
-        "advanced": "Lignified apoplastic conduits providing continuous negative-pressure structural pathways for transpirational pull."
+        "advanced": "Lignified apoplastic conduits providing continuous negative-pressure structural pathways for transpirational pull.",
+        "say": "xylem",
+        "gloss": "the wood — the plant's water pipes",
+        "etymology": "Greek xylon, 'wood' — the water-conducting wood tissue. (Same root as xylophone, 'wood-sound'.)"
     },
     "phloem": {
         "proper_name": "phloem tissue (sieve-tube elements)",
         "analog": "sugar transit conveyor",
         "intro_explanation": "Phloem tissue is composed of living sieve-tube elements and companion cells, which functions like a transit conveyor moving freshly synthesized sugars outward to fuel the plant.",
         "beginner": "An active transit highway distributing energy compounds across the plant body.",
-        "advanced": "Living vascular channels facilitating symplastic translocation of photoassimilates driven by hydrostatic pressure gradients."
+        "advanced": "Living vascular channels facilitating symplastic translocation of photoassimilates driven by hydrostatic pressure gradients.",
+        "say": "phloem",
+        "gloss": "the living tubes that carry sugars through the plant",
+        "etymology": "Greek phloos, 'bark' — the food-conducting tissue, named for its position near the bark."
     },
     "upper epidermis": {
         "proper_name": "upper epidermal tissue",
         "analog": "greenhouse glass roof",
         "intro_explanation": "Upper epidermal tissue is a continuous, transparent cell layer, which functions like a greenhouse glass roof that protects internal layers while letting sunlight pass straight through.",
         "beginner": "A tightly fitted protective layer shielding internal cells while letting sunlight flood through.",
-        "advanced": "A non-photosynthetic tabular boundary layer coated with cutin to minimize transpiration while maximizing light transmittance."
+        "advanced": "A non-photosynthetic tabular boundary layer coated with cutin to minimize transpiration while maximizing light transmittance.",
+        "say": "upper epidermis",
+        "gloss": "the leaf's outer skin layer, on the top surface",
+        "etymology": "Greek epi- 'upon' + derma 'skin' — the layer laid upon the skin."
     },
     "cuticle": {
         "proper_name": "cuticular membrane",
         "analog": "waterproof sealant layer",
         "intro_explanation": "The cuticular membrane is an extracellular lipid layer, which functions like a waterproof sealant layer locking moisture safely inside against dry air.",
         "beginner": "An invisible waxy raincoat sealing the surface to prevent moisture loss.",
-        "advanced": "An extracellular polymer matrix of cutin and waxes serving as the primary barrier against non-stomatal water diffusion."
+        "advanced": "An extracellular polymer matrix of cutin and waxes serving as the primary barrier against non-stomatal water diffusion.",
+        "say": "cuticle",
+        "gloss": "the waxy, waterproof outer film of the leaf",
+        "etymology": "Latin cuticula, 'little skin' — a diminutive of cutis, 'skin'."
     },
     "lower epidermis": {
         "proper_name": "lower epidermal tissue and stomatal complexes",
         "analog": "secure utility vault with gateway valves",
         "intro_explanation": "Lower epidermal tissue contains specialized guard cells, which functions like a secure utility vault equipped with gateway valves to regulate humidity and gas exchange.",
         "beginner": "The baseline defense featuring microscopic gateway valves regulating air exchange.",
-        "advanced": "A cellular boundary housing stomatal complexes that mediate gas exchange and govern intrinsic water-use efficiency."
+        "advanced": "A cellular boundary housing stomatal complexes that mediate gas exchange and govern intrinsic water-use efficiency.",
+        "say": "lower epidermis",
+        "gloss": "the outer skin on the underside, carrying the breathing pores",
+        "etymology": "Epidermis = Greek epi- 'upon' + derma 'skin'. Its pores are stomata — Greek stoma, 'mouth' — the little mouths that breathe."
     },
     "midrib ground-tissue parenchyma": {
         "proper_name": "midrib ground parenchyma",
         "analog": "packing and bracing around the vein",
         "intro_explanation": "The midrib ground parenchyma is bulky, thin-walled packing tissue filling the leaf's central rib, which functions like the packing and bracing around the vein — giving the midrib its rigidity and cushioning the vascular bundle that runs through it.",
         "beginner": "Bulky filler cells that pad and stiffen the leaf's central rib around the big vein.",
-        "advanced": "Thin-walled ground parenchyma of the midrib, often reinforced by collenchyma near the surface, that mechanically supports the central vascular bundle and provides bulk, rigidity, and storage."
+        "advanced": "Thin-walled ground parenchyma of the midrib, often reinforced by collenchyma near the surface, that mechanically supports the central vascular bundle and provides bulk, rigidity, and storage.",
+        "say": "parenchyma",
+        "gloss": "the soft packing tissue that fills the central rib",
+        "etymology": "Parenchyma = Greek para- 'beside' + enchyma 'an infusion, a pouring-in' — cells poured in beside the others. 'Ground' tissue is the general filling between the specialized parts."
     },
     "bundle sheath and vascular-associated tissue": {
         "proper_name": "bundle sheath",
         "analog": "a checkpoint wrapper around the vein",
         "intro_explanation": "The bundle sheath is a compact layer of cells wrapping each vascular bundle, which functions like a checkpoint wrapper around the vein — controlling what passes between the plumbing of xylem and phloem and the surrounding leaf tissue.",
         "beginner": "A snug ring of cells around the vein that controls what moves in and out.",
-        "advanced": "A concentric parenchymatous sheath enclosing the vascular bundle, regulating apoplastic and symplastic exchange between the vascular tissue and the mesophyll, sometimes extending as bundle-sheath extensions to the epidermis."
+        "advanced": "A concentric parenchymatous sheath enclosing the vascular bundle, regulating apoplastic and symplastic exchange between the vascular tissue and the mesophyll, sometimes extending as bundle-sheath extensions to the epidermis.",
+        "say": "bundle sheath",
+        "gloss": "the ring of cells wrapping the vein",
+        "etymology": "Sheath = a close-fitting cover (Old English sceath); it bundles and wraps the vascular tissue. (English, not Greek — a plainer name for a plainer job.)"
     }
 }
