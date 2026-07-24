@@ -240,6 +240,9 @@
             let maskCanvas = document.createElement("canvas");
             let maskCtx = maskCanvas.getContext("2d", { willReadFrequently: true });
 
+            let currentAudio = null;   // the voice clip currently playing (stop-on-new)
+            let voiceGen = 0;          // increments per speech action; older ones are discarded
+
             // Dimensions come from the loaded image; identification comes from the
             // slide manifest. Nothing about tissues or colours is hardcoded here.
             let masterWidth = 0;
@@ -253,6 +256,32 @@
             const MATCH_TOL = 25;      // exact-ish tolerance for the categorical mask
 
             const titleCase = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+
+            // --- Voice playback: one clip at a time, newest action wins ---
+            function stopVoice() {
+                if (currentAudio) {
+                    try { currentAudio.pause(); currentAudio.currentTime = 0; } catch (e) {}
+                    currentAudio = null;
+                }
+            }
+            async function renderAndPlay(text, model, myGen) {
+                const body = { text };
+                if (model) body.model = model;
+                const r = await fetch("/.netlify/functions/speak", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body)
+                });
+                if (!r.ok) throw new Error("Voice proxy request failed.");
+                if (myGen !== voiceGen) return;          // superseded during the fetch
+                const blob = await r.blob();
+                if (myGen !== voiceGen) return;
+                const url = URL.createObjectURL(blob);
+                const audio = new Audio(url);
+                audio.addEventListener("ended", () => URL.revokeObjectURL(url));
+                currentAudio = audio;
+                await audio.play().catch(() => {});      // swallow autoplay-gesture rejections
+            }
 
             // Handle Splash Screen Dismissal & Initial Audio Unlock Context
             launchBtn.addEventListener("click", () => {
@@ -422,19 +451,13 @@
                 const spoken = m.ipa
                     ? `<phoneme alphabet="ipa" ph="${m.ipa}">${m.say}</phoneme>`
                     : m.say;
+                const myGen = ++voiceGen;
+                stopVoice();
                 pronounceBtn.disabled = true;
                 const prev = pronounceBtn.textContent;
                 pronounceBtn.textContent = "🔊 …";
                 try {
-                    const r = await fetch("/.netlify/functions/speak", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ text: spoken, model: "eleven_turbo_v2" })
-                    });
-                    if (r.ok) {
-                        const blob = await r.blob();
-                        new Audio(URL.createObjectURL(blob)).play();
-                    }
+                    await renderAndPlay(spoken, "eleven_turbo_v2", myGen);
                 } catch (e) {
                     console.error("pronounce error:", e);
                 } finally {
@@ -507,6 +530,9 @@
 
             async function triggerAudioFeedback(actionType) {
                 if (!maskImage || !leafImage || !palette.length) return; // not loaded yet
+
+                const myGen = ++voiceGen;   // newest speech action wins; older ones discarded
+                stopVoice();
 
                 const detectedLayer = sampleCurrentTissue();
                 const targetKey = objectiveSelect.value;
@@ -585,22 +611,12 @@
                     }
                 }
 
+                if (myGen !== voiceGen) return;   // a newer action superseded this one
                 audioStatus.textContent = feedbackText;
 
-                // Voice via the ElevenLabs proxy function (key stays server-side).
+                // Voice via the ElevenLabs proxy (stops any prior clip; discards if superseded).
                 try {
-                    const response = await fetch("/.netlify/functions/speak", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ text: feedbackText })
-                    });
-
-                    if (!response.ok) throw new Error("Voice proxy request failed.");
-
-                    const audioBlob = await response.blob();
-                    const audioUrl = URL.createObjectURL(audioBlob);
-                    const speech = new Audio(audioUrl);
-                    speech.play();
+                    await renderAndPlay(feedbackText, null, myGen);
                 } catch (error) {
                     console.error("Audio generation error:", error);
                 }
