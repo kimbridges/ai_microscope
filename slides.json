@@ -1,4 +1,5 @@
 {
+  "intro": "If you're here for the first time, welcome! This is a place for you to warm up for your lab that will use microscopes. Here, you can get comfortable moving the view, changing magnification, and saying the names. The goal is for you to feel familiar with both the topic and a microscope. Nothing's graded; just explore. If you've already done the lab with the microscope, welcome back! You now know how a real microscope works. Here, you can review the materials and let the concepts settle in. Revisit the tissues, and let the names and their roots click into place.",
   "slides": [
     { "id": "syringa_japonica", "label": "Syringa japonica — lilac leaf", "manifest": "slide_syringa.json" }
   ]

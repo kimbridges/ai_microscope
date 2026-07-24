@@ -185,10 +185,10 @@
             </div>
 
             <div class="control-group">
-                <label for="depth-select">🎓 Pedagogical Depth Mode:</label>
+                <label for="depth-select">🎓 Lab stage:</label>
                 <select id="depth-select">
-                    <option value="beginner" selected>Beginner (Analogy & Context)</option>
-                    <option value="advanced">Advanced (Quantitative & Ecological)</option>
+                    <option value="beginner" selected>Before the lab — preview</option>
+                    <option value="advanced">After the lab — review</option>
                 </select>
             </div>
 
@@ -250,6 +250,7 @@
 
             let currentAudio = null;   // the voice clip currently playing (stop-on-new)
             let voiceGen = 0;          // increments per speech action; older ones are discarded
+            let introText = "";        // launch welcome, loaded from slides.json (editable as data)
 
             // Dimensions come from the loaded image; identification comes from the
             // slide manifest. Nothing about tissues or colours is hardcoded here.
@@ -294,9 +295,22 @@
             // Handle Splash Screen Dismissal & Initial Audio Unlock Context
             launchBtn.addEventListener("click", () => {
                 splashScreen.classList.add("hidden");
-                // Trigger welcome audio briefing immediately upon launch
-                triggerAudioFeedback("Objective Briefing");
+                playIntro();   // the welcome/orientation, not a tissue briefing
             });
+
+            // Spoken welcome on launch. Text comes from slides.json (`intro`) so it's
+            // editable as data; the toggle's two lab-stage labels tell the student which
+            // visit they're on, while the intro greets both first-timers and returners.
+            async function playIntro() {
+                const text = introText ||
+                    "Welcome to the AI Microscope. Explore freely — nothing here is graded.";
+                const myGen = ++voiceGen;
+                stopVoice();
+                audioStatus.textContent = text;
+                audioStatus.style.color = "#38bdf8";
+                try { await renderAndPlay(text, null, myGen); }
+                catch (e) { console.error("intro error:", e); }
+            }
 
             // Square crop centred on the stage, sized by magnification and safe for any
             // image aspect ratio. Real 4x/10x/40x objectives give field-of-view ratios of
@@ -362,6 +376,7 @@
                 const idxResp = await fetch("slides.json");
                 if (idxResp.ok) {
                     const idx = await idxResp.json();
+                    if (idx && idx.intro) introText = idx.intro;
                     if (idx && Array.isArray(idx.slides) && idx.slides.length) slideList = idx.slides;
                 }
             } catch (e) { /* fall back to the built-in single slide */ }
